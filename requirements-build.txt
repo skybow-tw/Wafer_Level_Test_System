@@ -1,0 +1,2 @@
+# Optional: needed to build executables (packaging\build_waferlevel.ps1 / build_bmt5000.ps1)
+pyinstaller>=6.0.0

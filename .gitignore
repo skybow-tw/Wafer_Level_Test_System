@@ -1,0 +1,14 @@
+# Local Python environment and cache
+venv/
+**/__pycache__/
+*.py[cod]
+
+# PyInstaller output
+build/
+dist/
+
+# Generated measurement data and reports
+00_Datalog/
+
+# Local reference material excluded from version control
+00_wafer map/

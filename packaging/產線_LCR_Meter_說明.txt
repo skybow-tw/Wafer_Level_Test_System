@@ -1,0 +1,27 @@
+【產線技術員】LCR Meter
+=======================
+
+1. 向工程師取得「LCRMeter.exe」
+2. 放到桌面或固定資料夾，雙擊即可（不需安裝 Python）
+3. 以 GPIB 連好 E4980A 後，在視窗內掃描並選擇儀器 → Configure → Start
+
+若無法掃描 GPIB 儀器，請聯絡工程師確認 NI-VISA 驅動已安裝。
+
+
+【工程師】打包 EXE
+==================
+
+在專案根目錄（已建好 venv、已 pip install -r requirements.txt）：
+
+  powershell -ExecutionPolicy Bypass -File packaging\build_lcr_meter.ps1
+
+產出：dist\LCRMeter.exe
+
+交付產線：複製 LCRMeter.exe 即可（單檔；首次啟動可能稍慢）。
+目標電腦需安裝 NI-VISA（GPIB 通訊）。
+
+開發除錯（未打包）仍可用：
+  python -m instruments.panels.lcr_meter
+  python main.py --lcr
+
+Wafer 主程式整合不變，仍透過 registry 開啟同一套 LCR Meter 視窗。

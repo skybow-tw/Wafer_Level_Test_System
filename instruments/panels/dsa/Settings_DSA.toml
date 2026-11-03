@@ -1,0 +1,30 @@
+# DSA hardware and signal settings
+
+[sampling]
+frequency_hz = 200000
+
+[ao_source]
+channel = "PXIe-4468_1/ao0"
+max_v = 5
+min_v = -5
+terminal = "Default"
+
+[ai_stimulus]
+channel = "PXIe-4468_1/ai0"
+max_v = 5
+min_v = -5
+terminal = "Default"
+
+[ai_response]
+channel = "PXIe-4468_1/ai1"
+max_v = 5
+min_v = -5
+terminal = "Default"
+
+[signal]
+freq_start_hz = 10000
+freq_stop_hz = 22000
+point_count = 201
+vpp = 0.13
+dc_offset_v = 0
+save_to_file = true

@@ -1,0 +1,26 @@
+【產線技術員】BMT5000
+====================
+
+1. 向工程師取得「BMT5000.exe」
+2. 放到桌面或固定資料夾，雙擊即可（不需安裝 Python）
+3. USB 線連好 BMT5000 裝置後，在視窗內選 USB → Connect
+
+若無法連線 USB，請聯絡工程師（驅動 / libusb 設定）。
+
+
+【工程師】打包 EXE
+==================
+
+在專案根目錄（已建好 venv、已 pip install -r requirements.txt）：
+
+  powershell -ExecutionPolicy Bypass -File packaging\build_bmt5000.ps1
+
+產出：dist\BMT5000.exe
+
+交付產線：只複製 BMT5000.exe 即可（單檔；首次啟動可能稍慢）。
+
+開發除錯（未打包）仍可用：
+  python -m instruments.panels.bmt5000
+  python main.py --bmt5000
+
+Wafer 主程式整合不變，仍透過 registry 開啟同一套 BMT5000 視窗。

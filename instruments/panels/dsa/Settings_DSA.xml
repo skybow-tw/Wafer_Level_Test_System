@@ -1,0 +1,72 @@
+<?xml version='1.0' standalone='yes' ?>
+<LVData xmlns="http://www.ni.com/LVData">
+<Version>17.0.1f4</Version>
+<Cluster>
+<Name>Hardware Selection in</Name>
+<NumElts>4</NumElts>
+<Cluster>
+<Name>AO source settings</Name>
+<NumElts>4</NumElts>
+<DAQChannel>
+<Name>AO excitation channel</Name>
+<Val>DSA_PXI4461/ao0</Val>
+</DAQChannel>
+<DBL>
+<Name>max value [V]</Name>
+<Val>5.00000000000000</Val>
+</DBL>
+<DBL>
+<Name>min value [V]</Name>
+<Val>-5.00000000000000</Val>
+</DBL>
+<I32>
+<Name>terminal configuration</Name>
+<Val>-1</Val>
+</I32>
+</Cluster>
+<Cluster>
+<Name>AI stimulus settings</Name>
+<NumElts>4</NumElts>
+<DAQChannel>
+<Name>AI stimulus channel</Name>
+<Val>DSA_PXI4461/ai0</Val>
+</DAQChannel>
+<DBL>
+<Name>max value [V]</Name>
+<Val>5.00000000000000</Val>
+</DBL>
+<DBL>
+<Name>min value [V]</Name>
+<Val>-5.00000000000000</Val>
+</DBL>
+<I32>
+<Name>terminal configuration</Name>
+<Val>-1</Val>
+</I32>
+</Cluster>
+<Cluster>
+<Name>AI response settings</Name>
+<NumElts>4</NumElts>
+<DAQChannel>
+<Name>AI response channel</Name>
+<Val>DSA_PXI4461/ai1</Val>
+</DAQChannel>
+<DBL>
+<Name>max value [V]</Name>
+<Val>5.00000000000000</Val>
+</DBL>
+<DBL>
+<Name>min value [V]</Name>
+<Val>-5.00000000000000</Val>
+</DBL>
+<I32>
+<Name>terminal configuration</Name>
+<Val>-1</Val>
+</I32>
+</Cluster>
+<DBL>
+<Name>sampling frequency</Name>
+<Val>200000.00000000000000</Val>
+</DBL>
+</Cluster>
+</LVData>

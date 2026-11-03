@@ -1,0 +1,1 @@
+"""Shared BMT panel pieces."""
