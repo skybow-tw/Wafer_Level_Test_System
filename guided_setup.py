@@ -446,18 +446,18 @@ class GuidedSetupWindow(QMainWindow):
         choice_grid.setRowStretch(0, 1)
         choice_grid.setRowStretch(1, 1)
 
-        self.btn_function_test = QPushButton(InstrumentType.FUNCTION_TEST_SPI_DAC.value)
+        self.btn_function_test = QPushButton("Function Test\n(SPI、DAC)")
         self.btn_function_test.setCheckable(True)
         self.btn_function_test.setProperty("setupChoice", "true")
         self.btn_function_test.setMinimumHeight(56)
         self.btn_function_test.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
-        function_font = QFont(self.btn_function_test.font())
-        function_font.setPointSize(max(QApplication.font().pointSize(), 10))
-        self.btn_function_test.setFont(function_font)
+        self._apply_choice_button_font(self.btn_function_test, checked=False)
         self.btn_function_test.toggled.connect(
-            lambda checked: self._set_function_button_bold(checked)
+            lambda checked: self._apply_choice_button_font(
+                self.btn_function_test, checked
+            )
         )
         self.btn_function_test.clicked.connect(self._on_asic_instrument_selected)
         choice_grid.addWidget(self.btn_function_test, 0, 0)
@@ -482,11 +482,6 @@ class GuidedSetupWindow(QMainWindow):
         tcp_row.addStretch()
         layout.addLayout(tcp_row)
         return group
-
-    def _set_function_button_bold(self, checked: bool) -> None:
-        font = QFont(self.btn_function_test.font())
-        font.setBold(checked)
-        self.btn_function_test.setFont(font)
 
     def _configure_instrument_page(
         self,
