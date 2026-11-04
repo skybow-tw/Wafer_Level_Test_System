@@ -138,6 +138,7 @@ _ASIC_INSTRUMENT_BUTTONS: tuple[tuple[str, InstrumentType], ...] = (
 _DUT_PAGE_INDEX = 4
 _INSTRUMENT_PAGE_INDEX = 5
 _BOLOMETER_ASIC_PAGE_INDEX = 6
+_ASIC_SERVER_DEFAULT_IP = "192.168.50.186"
 _ASIC_SERVER_DEFAULT_PORT = 5000
 
 _TCP_PROBER_TYPES = frozenset(
@@ -461,7 +462,7 @@ class GuidedSetupWindow(QMainWindow):
 
         tcp_row = QHBoxLayout()
         tcp_row.addWidget(QLabel("Server IP:"))
-        self.edit_asic_server_ip = QLineEdit("127.0.0.1")
+        self.edit_asic_server_ip = QLineEdit(_ASIC_SERVER_DEFAULT_IP)
         self.edit_asic_server_ip.setFixedWidth(130)
         tcp_row.addWidget(self.edit_asic_server_ip)
         tcp_row.addWidget(QLabel("Port:"))
