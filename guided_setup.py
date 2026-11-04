@@ -50,7 +50,12 @@ class BmModelType(Enum):
 
 
 class ImuSubType(Enum):
-    COMPONENT = "元件"
+    COMPONENT = "Element"
+    ASIC = "ASIC"
+
+
+class DutType(Enum):
+    ELEMENT = "Element"
     ASIC = "ASIC"
 
 
@@ -70,6 +75,7 @@ class GuidedSetupResult:
     device_type: DeviceType
     bm_model: BmModelType | None = None
     imu_subtype: ImuSubType | None = None
+    dut_type: DutType | None = None
     instrument_type: InstrumentType | None = None
     tcp_client: ProberTcpClient | None = None
 
@@ -96,8 +102,13 @@ _BM_BUTTONS: tuple[tuple[str, BmModelType], ...] = (
 )
 
 _IMU_BUTTONS: tuple[tuple[str, ImuSubType], ...] = (
-    ("元件", ImuSubType.COMPONENT),
+    ("Element", ImuSubType.COMPONENT),
     ("ASIC", ImuSubType.ASIC),
+)
+
+_DUT_BUTTONS: tuple[tuple[str, DutType], ...] = (
+    ("Element", DutType.ELEMENT),
+    ("ASIC", DutType.ASIC),
 )
 
 _TRADITIONAL_INSTRUMENT_BUTTONS: tuple[tuple[str, InstrumentType], ...] = (
@@ -121,7 +132,8 @@ _ASIC_INSTRUMENT_BUTTONS: tuple[tuple[str, InstrumentType], ...] = (
     ("NI 8452 SPI Test", InstrumentType.NI_8452_SPI_TEST),
 )
 
-_INSTRUMENT_PAGE_INDEX = 4
+_DUT_PAGE_INDEX = 4
+_INSTRUMENT_PAGE_INDEX = 5
 
 _TCP_PROBER_TYPES = frozenset(
     {ProberType.SUSS, ProberType.MPI_TP80, ProberType.MPI_TS2000}
@@ -174,6 +186,7 @@ class GuidedSetupWindow(QMainWindow):
         self._selected_device: DeviceType | None = None
         self._selected_bm: BmModelType | None = None
         self._selected_imu_subtype: ImuSubType | None = None
+        self._selected_dut: DutType | None = None
         self._selected_instrument: InstrumentType | None = None
         self._instrument_back_index = 1
         self._instrument_page: QGroupBox | None = None
@@ -233,6 +246,13 @@ class GuidedSetupWindow(QMainWindow):
                 "IMU selection:",
                 _IMU_BUTTONS,
                 self._on_imu_selected,
+            )
+        )
+        self._stack.addWidget(
+            self._build_choice_page(
+                "DUT Selection:",
+                _DUT_BUTTONS,
+                self._on_dut_selected,
             )
         )
         self._instrument_page = self._build_instrument_page()
@@ -351,7 +371,7 @@ class GuidedSetupWindow(QMainWindow):
     def _build_choice_page(
         self,
         title: str,
-        options: tuple[tuple[str, ProberType | DeviceType | BmModelType | ImuSubType], ...],
+        options: tuple[tuple[str, ProberType | DeviceType | BmModelType | ImuSubType | DutType], ...],
         on_selected,
     ) -> QGroupBox:
         group = QGroupBox(title)
@@ -458,10 +478,15 @@ class GuidedSetupWindow(QMainWindow):
 
     def _show_instrument_page(
         self,
-        title: str,
         options: tuple[tuple[str, InstrumentType], ...],
         back_index: int,
     ) -> None:
+        title_parts = [self._selected_device.value]
+        if self._selected_device == DeviceType.BOLOMETER:
+            title_parts.extend((self._selected_bm.value, self._selected_dut.value))
+        elif self._selected_device == DeviceType.IMU:
+            title_parts.append(self._selected_imu_subtype.value)
+        title = f"{'_'.join(title_parts)}_Instrument Selection"
         self._configure_instrument_page(title, options, back_index)
         self._stack.setCurrentIndex(_INSTRUMENT_PAGE_INDEX)
         self.btn_next.setText("完成")
@@ -756,6 +781,11 @@ class GuidedSetupWindow(QMainWindow):
         if self._stack.currentIndex() == 3:
             self.btn_next.setEnabled(True)
 
+    def _on_dut_selected(self, dut_type: DutType) -> None:
+        self._selected_dut = dut_type
+        if self._stack.currentIndex() == _DUT_PAGE_INDEX:
+            self.btn_next.setEnabled(True)
+
     def _on_instrument_selected(self, instrument_type: InstrumentType) -> None:
         self._selected_instrument = instrument_type
         if self._stack.currentIndex() == _INSTRUMENT_PAGE_INDEX:
@@ -790,6 +820,7 @@ class GuidedSetupWindow(QMainWindow):
                 device_type=device_type,
                 bm_model=self._selected_bm,
                 imu_subtype=self._selected_imu_subtype,
+                dut_type=self._selected_dut,
                 instrument_type=instrument_type,
                 tcp_client=tcp_client,
             )
@@ -811,6 +842,15 @@ class GuidedSetupWindow(QMainWindow):
             elif self._instrument_back_index == 3:
                 self.btn_next.setText("下一步")
                 self.btn_next.setEnabled(self._selected_imu_subtype is not None)
+            elif self._instrument_back_index == _DUT_PAGE_INDEX:
+                self.btn_next.setText("下一步")
+                self.btn_next.setEnabled(self._selected_dut is not None)
+            self._update_prev_button()
+            return
+        if current == _DUT_PAGE_INDEX:
+            self._stack.setCurrentIndex(2)
+            self.btn_next.setText("下一步")
+            self.btn_next.setEnabled(self._selected_bm is not None)
             self._update_prev_button()
             return
         if current in (2, 3):
@@ -852,14 +892,12 @@ class GuidedSetupWindow(QMainWindow):
                 return
             if self._selected_device == DeviceType.GYRO:
                 self._show_instrument_page(
-                    "傳統儀器:",
                     _TRADITIONAL_INSTRUMENT_BUTTONS,
                     back_index=1,
                 )
                 return
             if self._selected_device == DeviceType.OTHERS:
                 self._show_instrument_page(
-                    "Instrument selection:",
                     _OTHERS_INSTRUMENT_BUTTONS,
                     back_index=1,
                 )
@@ -868,11 +906,10 @@ class GuidedSetupWindow(QMainWindow):
         if current == 2:
             if self._selected_bm is None:
                 return
-            self._show_instrument_page(
-                "Instrument selection:",
-                _BOLOMETER_INSTRUMENT_BUTTONS,
-                back_index=2,
-            )
+            self._stack.setCurrentIndex(_DUT_PAGE_INDEX)
+            self.btn_next.setText("下一步")
+            self.btn_next.setEnabled(self._selected_dut is not None)
+            self._update_prev_button()
             return
 
         if current == 3:
@@ -880,15 +917,22 @@ class GuidedSetupWindow(QMainWindow):
                 return
             if self._selected_imu_subtype == ImuSubType.COMPONENT:
                 self._show_instrument_page(
-                    "傳統儀器:",
                     _TRADITIONAL_INSTRUMENT_BUTTONS,
                     back_index=3,
                 )
                 return
             self._show_instrument_page(
-                "Instrument selection:",
                 _ASIC_INSTRUMENT_BUTTONS,
                 back_index=3,
+            )
+            return
+
+        if current == _DUT_PAGE_INDEX:
+            if self._selected_dut is None:
+                return
+            self._show_instrument_page(
+                _BOLOMETER_INSTRUMENT_BUTTONS,
+                back_index=_DUT_PAGE_INDEX,
             )
             return
 
