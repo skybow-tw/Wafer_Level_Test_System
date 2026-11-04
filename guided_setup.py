@@ -436,13 +436,15 @@ class GuidedSetupWindow(QMainWindow):
 
     def _build_bolometer_asic_page(self) -> QGroupBox:
         group = QGroupBox()
-        layout = QGridLayout(group)
+        layout = QVBoxLayout(group)
         layout.setContentsMargins(10, 14, 10, 10)
         layout.setSpacing(10)
-        layout.setColumnStretch(0, 1)
-        layout.setColumnStretch(1, 1)
-        layout.setRowStretch(0, 1)
-        layout.setRowStretch(1, 1)
+        choice_grid = QGridLayout()
+        choice_grid.setSpacing(10)
+        choice_grid.setColumnStretch(0, 1)
+        choice_grid.setColumnStretch(1, 1)
+        choice_grid.setRowStretch(0, 1)
+        choice_grid.setRowStretch(1, 1)
 
         self.btn_function_test = QPushButton(InstrumentType.FUNCTION_TEST_SPI_DAC.value)
         self.btn_function_test.setCheckable(True)
@@ -451,14 +453,15 @@ class GuidedSetupWindow(QMainWindow):
         self.btn_function_test.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
-        self._apply_choice_button_font(self.btn_function_test, checked=False)
+        function_font = QFont(self.btn_function_test.font())
+        function_font.setPointSize(max(QApplication.font().pointSize(), 10))
+        self.btn_function_test.setFont(function_font)
         self.btn_function_test.toggled.connect(
-            lambda checked: self._apply_choice_button_font(
-                self.btn_function_test, checked
-            )
+            lambda checked: self._set_function_button_bold(checked)
         )
         self.btn_function_test.clicked.connect(self._on_asic_instrument_selected)
-        layout.addWidget(self.btn_function_test, 0, 0, 2, 2)
+        choice_grid.addWidget(self.btn_function_test, 0, 0)
+        layout.addLayout(choice_grid, stretch=1)
 
         tcp_row = QHBoxLayout()
         tcp_row.addWidget(QLabel("Server IP:"))
@@ -477,8 +480,13 @@ class GuidedSetupWindow(QMainWindow):
         self.lbl_asic_tcp_status.setFixedWidth(120)
         tcp_row.addWidget(self.lbl_asic_tcp_status)
         tcp_row.addStretch()
-        layout.addLayout(tcp_row, 2, 0, 1, 2)
+        layout.addLayout(tcp_row)
         return group
+
+    def _set_function_button_bold(self, checked: bool) -> None:
+        font = QFont(self.btn_function_test.font())
+        font.setBold(checked)
+        self.btn_function_test.setFont(font)
 
     def _configure_instrument_page(
         self,
