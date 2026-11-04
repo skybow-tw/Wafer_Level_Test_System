@@ -43,6 +43,7 @@ from prober_motor import ProberType, create_chuck_motor
 from prober_motor.mpi_tp80 import MpiTp80ChuckMotor
 from prober_motor.suss import SussChuckMotor
 from prober_motor.tcp_client import ProberTcpClient
+from instruments.bmt_tcp import BmtTcpClient
 from wafer_map_view import WaferMapView
 
 logger = logging.getLogger(__name__)
@@ -78,6 +79,7 @@ class MainWindow(QMainWindow):
         bm_model: str | None = None,
         instrument_type: str | None = None,
         tcp_client: ProberTcpClient | None = None,
+        asic_tcp_client: BmtTcpClient | None = None,
     ):
         super().__init__()
         self._work_dir = work_dir or Path.cwd()
@@ -88,6 +90,7 @@ class MainWindow(QMainWindow):
         self._tcp_client = (
             tcp_client if tcp_client is not None else ProberTcpClient(self)
         )
+        self._asic_tcp_client = asic_tcp_client
         self._attach_tcp_client_to_motor()
         self._read_initial_contact_height()
         self._datalog_session_dir: Path | None = None
@@ -924,6 +927,8 @@ class MainWindow(QMainWindow):
             self._stop_z_velocity_move()
         self._close_instrument_windows()
         self._disconnect_tcp()
+        if self._asic_tcp_client is not None:
+            self._asic_tcp_client.disconnect()
         self._datalog_watcher.stop()
         super().closeEvent(event)
 
@@ -1311,6 +1316,7 @@ def run_app(work_dir: Path | None = None) -> int:
                 else None
             ),
             tcp_client=result.tcp_client,
+            asic_tcp_client=result.asic_tcp_client,
         )
         position_main_window_at_screen_left(main_window)
         main_window.show()

@@ -19,6 +19,7 @@ DSA_DISPLAY_NAME = "DSA"
 NI_8452_DISPLAY_NAME = "NI_8452"
 # Guided-setup label (same panel as NI_8452 menu entry).
 NI_8452_SPI_TEST_DISPLAY_NAME = "NI 8452 SPI Test"
+FUNCTION_TEST_SPI_DAC_DISPLAY_NAME = "Function Test(SPI、DAC)"
 
 INSTRUMENT_DISPLAY_NAMES: frozenset[str] = frozenset(
     {
@@ -30,6 +31,7 @@ INSTRUMENT_DISPLAY_NAMES: frozenset[str] = frozenset(
         DSA_DISPLAY_NAME,
         NI_8452_DISPLAY_NAME,
         NI_8452_SPI_TEST_DISPLAY_NAME,
+        FUNCTION_TEST_SPI_DAC_DISPLAY_NAME,
     }
 )
 
@@ -39,6 +41,10 @@ def create_modular_instrument_window(
     parent: QWidget | None = None,
     work_dir: Path | None = None,
 ) -> InstrumentPanelBase | None:
+    if instrument_name == FUNCTION_TEST_SPI_DAC_DISPLAY_NAME:
+        from instruments.panels.function_test_window import FunctionTestWindow
+
+        return FunctionTestWindow(parent=parent, work_dir=work_dir)
     if instrument_name == VIRTUAL_LCR_INSTRUMENT_NAME:
         from instruments.panels.virtual_lcr.window import VirtualLcrWindow
 

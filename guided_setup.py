@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from instruments.bmt_tcp import BmtTcpClient, DEFAULT_BMT_TCP_PORT
 from prober_motor import ProberType, create_chuck_motor
 from prober_motor.base import ChuckMotorBase
 from prober_motor.mpi_tp80 import MpiTp80ChuckMotor
@@ -67,6 +68,7 @@ class InstrumentType(Enum):
     BMT3000 = "BMT3000"
     BMT5000 = "BMT5000"
     NI_8452_SPI_TEST = "NI 8452 SPI Test"
+    FUNCTION_TEST_SPI_DAC = "Function Test(SPI、DAC)"
 
 
 @dataclass(frozen=True)
@@ -78,6 +80,7 @@ class GuidedSetupResult:
     dut_type: DutType | None = None
     instrument_type: InstrumentType | None = None
     tcp_client: ProberTcpClient | None = None
+    asic_tcp_client: BmtTcpClient | None = None
 
 
 _PROBER_BUTTONS: tuple[tuple[str, ProberType], ...] = (
@@ -134,6 +137,7 @@ _ASIC_INSTRUMENT_BUTTONS: tuple[tuple[str, InstrumentType], ...] = (
 
 _DUT_PAGE_INDEX = 4
 _INSTRUMENT_PAGE_INDEX = 5
+_BOLOMETER_ASIC_PAGE_INDEX = 6
 
 _TCP_PROBER_TYPES = frozenset(
     {ProberType.SUSS, ProberType.MPI_TP80, ProberType.MPI_TS2000}
@@ -191,6 +195,10 @@ class GuidedSetupWindow(QMainWindow):
         self._instrument_back_index = 1
         self._instrument_page: QGroupBox | None = None
         self._tcp_client = ProberTcpClient()
+        self._asic_tcp_client = BmtTcpClient()
+        self._asic_connecting = False
+        self._asic_connect_bridge = _TcpConnectBridge()
+        self._asic_connect_bridge.finished.connect(self._on_asic_tcp_connect_finished)
         self._tcp_connect_bridge = _TcpConnectBridge()
         self._tcp_connect_bridge.finished.connect(self._on_tcp_connect_finished)
         self._tcp_connecting = False
@@ -208,6 +216,7 @@ class GuidedSetupWindow(QMainWindow):
         self._build_ui()
         self.setStyleSheet(generate_theme_qss(THEMES["light"]) + _GUIDED_SETUP_QSS)
         self._update_tcp_panel()
+        self._update_asic_tcp_panel()
 
     def _build_ui(self) -> None:
         central = QWidget()
@@ -257,6 +266,7 @@ class GuidedSetupWindow(QMainWindow):
         )
         self._instrument_page = self._build_instrument_page()
         self._stack.addWidget(self._instrument_page)
+        self._stack.addWidget(self._build_bolometer_asic_page())
         panel_layout.addWidget(self._stack, stretch=1)
 
         nav_row = QHBoxLayout()
@@ -422,6 +432,51 @@ class GuidedSetupWindow(QMainWindow):
         layout.setSpacing(10)
         return group
 
+    def _build_bolometer_asic_page(self) -> QGroupBox:
+        group = QGroupBox()
+        layout = QGridLayout(group)
+        layout.setContentsMargins(10, 14, 10, 10)
+        layout.setSpacing(10)
+        layout.setColumnStretch(0, 1)
+        layout.setColumnStretch(1, 1)
+        layout.setRowStretch(0, 1)
+        layout.setRowStretch(1, 1)
+
+        self.btn_function_test = QPushButton(InstrumentType.FUNCTION_TEST_SPI_DAC.value)
+        self.btn_function_test.setCheckable(True)
+        self.btn_function_test.setProperty("setupChoice", "true")
+        self.btn_function_test.setMinimumHeight(56)
+        self.btn_function_test.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+        self._apply_choice_button_font(self.btn_function_test, checked=False)
+        self.btn_function_test.toggled.connect(
+            lambda checked: self._apply_choice_button_font(
+                self.btn_function_test, checked
+            )
+        )
+        self.btn_function_test.clicked.connect(self._on_asic_instrument_selected)
+        layout.addWidget(self.btn_function_test, 0, 0, 2, 2)
+
+        tcp_row = QHBoxLayout()
+        tcp_row.addWidget(QLabel("Server IP:"))
+        self.edit_asic_server_ip = QLineEdit("127.0.0.1")
+        self.edit_asic_server_ip.setFixedWidth(130)
+        tcp_row.addWidget(self.edit_asic_server_ip)
+        tcp_row.addWidget(QLabel("Port:"))
+        self.edit_asic_server_port = QLineEdit(str(DEFAULT_BMT_TCP_PORT))
+        self.edit_asic_server_port.setFixedWidth(60)
+        tcp_row.addWidget(self.edit_asic_server_port)
+        self.btn_asic_tcp_connect = QPushButton("Connect")
+        self.btn_asic_tcp_connect.clicked.connect(self._on_asic_tcp_connect_clicked)
+        tcp_row.addWidget(self.btn_asic_tcp_connect)
+        self.lbl_asic_tcp_status = QLabel("請連接 Server")
+        self.lbl_asic_tcp_status.setFixedWidth(120)
+        tcp_row.addWidget(self.lbl_asic_tcp_status)
+        tcp_row.addStretch()
+        layout.addLayout(tcp_row, 2, 0, 1, 2)
+        return group
+
     def _configure_instrument_page(
         self,
         title: str,
@@ -481,17 +536,106 @@ class GuidedSetupWindow(QMainWindow):
         options: tuple[tuple[str, InstrumentType], ...],
         back_index: int,
     ) -> None:
+        self._configure_instrument_page(
+            self._instrument_title(), options, back_index
+        )
+        self._stack.setCurrentIndex(_INSTRUMENT_PAGE_INDEX)
+        self.btn_next.setText("完成")
+        self.btn_next.setEnabled(False)
+        self._update_prev_button()
+
+    def _instrument_title(self) -> str:
         title_parts = [self._selected_device.value]
         if self._selected_device == DeviceType.BOLOMETER:
             title_parts.extend((self._selected_bm.value, self._selected_dut.value))
         elif self._selected_device == DeviceType.IMU:
             title_parts.append(self._selected_imu_subtype.value)
-        title = f"{'_'.join(title_parts)}_Instrument Selection"
-        self._configure_instrument_page(title, options, back_index)
-        self._stack.setCurrentIndex(_INSTRUMENT_PAGE_INDEX)
+        return f"{'_'.join(title_parts)}_Instrument Selection"
+
+    def _show_bolometer_asic_page(self) -> None:
+        self._selected_instrument = (
+            InstrumentType.FUNCTION_TEST_SPI_DAC
+            if self.btn_function_test.isChecked()
+            else None
+        )
+        self._stack.widget(_BOLOMETER_ASIC_PAGE_INDEX).setTitle(
+            self._instrument_title()
+        )
+        self._stack.setCurrentIndex(_BOLOMETER_ASIC_PAGE_INDEX)
         self.btn_next.setText("完成")
-        self.btn_next.setEnabled(False)
+        self._update_asic_next_button()
         self._update_prev_button()
+
+    def _update_asic_next_button(self) -> None:
+        if self._stack.currentIndex() == _BOLOMETER_ASIC_PAGE_INDEX:
+            self.btn_next.setEnabled(
+                self.btn_function_test.isChecked()
+                and self._asic_tcp_client.is_connected
+                and not self._asic_connecting
+            )
+
+    def _update_asic_tcp_panel(self) -> None:
+        connected = self._asic_tcp_client.is_connected
+        selected = self.btn_function_test.isChecked()
+        self.edit_asic_server_ip.setEnabled(
+            selected and not connected and not self._asic_connecting
+        )
+        self.edit_asic_server_port.setEnabled(
+            selected and not connected and not self._asic_connecting
+        )
+        self.btn_asic_tcp_connect.setEnabled(selected and not self._asic_connecting)
+        self.btn_asic_tcp_connect.setText("Disconnect" if connected else "Connect")
+        self._update_asic_next_button()
+
+    def _on_asic_instrument_selected(self, checked: bool) -> None:
+        if not checked and self._asic_tcp_client.is_connected:
+            self._asic_tcp_client.disconnect()
+            self.lbl_asic_tcp_status.setText("請連接 Server")
+        self._selected_instrument = (
+            InstrumentType.FUNCTION_TEST_SPI_DAC if checked else None
+        )
+        self._update_asic_tcp_panel()
+
+    def _on_asic_tcp_connect_clicked(self) -> None:
+        if self._asic_tcp_client.is_connected:
+            self._asic_tcp_client.disconnect()
+            self.lbl_asic_tcp_status.setText("請連接 Server")
+            self._update_asic_tcp_panel()
+            return
+        ip = self.edit_asic_server_ip.text().strip()
+        if not ip:
+            self.lbl_asic_tcp_status.setText("請輸入 Server IP")
+            return
+        try:
+            port = int(self.edit_asic_server_port.text().strip())
+        except ValueError:
+            self.lbl_asic_tcp_status.setText("Port 必須為整數")
+            return
+        if not 1 <= port <= 65535:
+            self.lbl_asic_tcp_status.setText("Port 必須介於 1–65535")
+            return
+        self._asic_connecting = True
+        self.lbl_asic_tcp_status.setText("TCP 連接中...")
+        self._update_asic_tcp_panel()
+
+        def connect_worker() -> None:
+            try:
+                self._asic_tcp_client.connect(ip, port)
+            except (OSError, TimeoutError) as exc:
+                self._asic_connect_bridge.finished.emit(
+                    False, _connect_error_code(exc)
+                )
+            else:
+                self._asic_connect_bridge.finished.emit(True, "")
+
+        threading.Thread(target=connect_worker, daemon=True).start()
+
+    def _on_asic_tcp_connect_finished(self, success: bool, error_code: str) -> None:
+        self._asic_connecting = False
+        self.lbl_asic_tcp_status.setText(
+            "TCP 已連接" if success else f"連線失敗 ({error_code or 'unknown'})"
+        )
+        self._update_asic_tcp_panel()
 
     def _apply_choice_button_font(self, button: QPushButton, checked: bool) -> None:
         font = QFont(button.font())
@@ -823,6 +967,12 @@ class GuidedSetupWindow(QMainWindow):
                 dut_type=self._selected_dut,
                 instrument_type=instrument_type,
                 tcp_client=tcp_client,
+                asic_tcp_client=(
+                    self._asic_tcp_client
+                    if self._selected_device == DeviceType.BOLOMETER
+                    and self._selected_dut == DutType.ASIC
+                    else None
+                ),
             )
         )
         self.close()
@@ -845,6 +995,12 @@ class GuidedSetupWindow(QMainWindow):
             elif self._instrument_back_index == _DUT_PAGE_INDEX:
                 self.btn_next.setText("下一步")
                 self.btn_next.setEnabled(self._selected_dut is not None)
+            self._update_prev_button()
+            return
+        if current == _BOLOMETER_ASIC_PAGE_INDEX:
+            self._stack.setCurrentIndex(_DUT_PAGE_INDEX)
+            self.btn_next.setText("下一步")
+            self.btn_next.setEnabled(self._selected_dut is not None)
             self._update_prev_button()
             return
         if current == _DUT_PAGE_INDEX:
@@ -930,14 +1086,23 @@ class GuidedSetupWindow(QMainWindow):
         if current == _DUT_PAGE_INDEX:
             if self._selected_dut is None:
                 return
-            self._show_instrument_page(
-                _BOLOMETER_INSTRUMENT_BUTTONS,
-                back_index=_DUT_PAGE_INDEX,
-            )
+            if self._selected_dut == DutType.ELEMENT:
+                self._show_instrument_page(
+                    _BOLOMETER_INSTRUMENT_BUTTONS,
+                    back_index=_DUT_PAGE_INDEX,
+                )
+            else:
+                self._show_bolometer_asic_page()
             return
 
         if current == _INSTRUMENT_PAGE_INDEX:
             if self._selected_instrument is None:
+                return
+            self._finish_setup()
+            return
+
+        if current == _BOLOMETER_ASIC_PAGE_INDEX:
+            if not self.btn_next.isEnabled():
                 return
             self._finish_setup()
 
@@ -945,6 +1110,7 @@ class GuidedSetupWindow(QMainWindow):
         self._stop_xy_velocity_move()
         if not self._completed:
             self._disconnect_tcp()
+            self._asic_tcp_client.disconnect()
             app = QApplication.instance()
             if app is not None:
                 app.quit()
