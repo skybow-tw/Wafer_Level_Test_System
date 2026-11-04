@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from bolometer_asic_tcp_settings import BolometerAsicTcpSettingsStore
 from instruments.bmt_tcp import BmtTcpClient
 from prober_motor import ProberType, create_chuck_motor
 from prober_motor.base import ChuckMotorBase
@@ -138,8 +139,6 @@ _ASIC_INSTRUMENT_BUTTONS: tuple[tuple[str, InstrumentType], ...] = (
 _DUT_PAGE_INDEX = 4
 _INSTRUMENT_PAGE_INDEX = 5
 _BOLOMETER_ASIC_PAGE_INDEX = 6
-_ASIC_SERVER_DEFAULT_IP = "192.168.50.186"
-_ASIC_SERVER_DEFAULT_PORT = 5000
 
 _TCP_PROBER_TYPES = frozenset(
     {ProberType.SUSS, ProberType.MPI_TP80, ProberType.MPI_TS2000}
@@ -187,6 +186,7 @@ class GuidedSetupWindow(QMainWindow):
         super().__init__()
         self._work_dir = work_dir or Path.cwd()
         self._tcp_settings = ProberTcpSettingsStore(self._work_dir)
+        self._asic_tcp_settings = BolometerAsicTcpSettingsStore(self._work_dir)
         self._completed = False
         self._selected_prober: ProberType | None = None
         self._selected_device: DeviceType | None = None
@@ -462,11 +462,12 @@ class GuidedSetupWindow(QMainWindow):
 
         tcp_row = QHBoxLayout()
         tcp_row.addWidget(QLabel("Server IP:"))
-        self.edit_asic_server_ip = QLineEdit(_ASIC_SERVER_DEFAULT_IP)
+        endpoint = self._asic_tcp_settings.get_endpoint()
+        self.edit_asic_server_ip = QLineEdit(endpoint.ip)
         self.edit_asic_server_ip.setFixedWidth(130)
         tcp_row.addWidget(self.edit_asic_server_ip)
         tcp_row.addWidget(QLabel("Port:"))
-        self.edit_asic_server_port = QLineEdit(str(_ASIC_SERVER_DEFAULT_PORT))
+        self.edit_asic_server_port = QLineEdit(str(endpoint.port))
         self.edit_asic_server_port.setFixedWidth(60)
         tcp_row.addWidget(self.edit_asic_server_port)
         self.btn_asic_tcp_connect = QPushButton("Connect")
@@ -634,6 +635,11 @@ class GuidedSetupWindow(QMainWindow):
 
     def _on_asic_tcp_connect_finished(self, success: bool, error_code: str) -> None:
         self._asic_connecting = False
+        if success:
+            self._asic_tcp_settings.save_endpoint(
+                self.edit_asic_server_ip.text(),
+                int(self.edit_asic_server_port.text()),
+            )
         self.lbl_asic_tcp_status.setText(
             "TCP 已連接" if success else f"連線失敗 ({error_code or 'unknown'})"
         )

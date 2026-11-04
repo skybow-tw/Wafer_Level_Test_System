@@ -12,3 +12,6 @@ dist/
 
 # Local reference material excluded from version control
 00_wafer map/
+
+# Last successful local Bolometer ASIC server endpoint
+bolometer_asic_tcp_settings.json
