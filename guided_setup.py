@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from instruments.bmt_tcp import BmtTcpClient, DEFAULT_BMT_TCP_PORT
+from instruments.bmt_tcp import BmtTcpClient
 from prober_motor import ProberType, create_chuck_motor
 from prober_motor.base import ChuckMotorBase
 from prober_motor.mpi_tp80 import MpiTp80ChuckMotor
@@ -138,6 +138,7 @@ _ASIC_INSTRUMENT_BUTTONS: tuple[tuple[str, InstrumentType], ...] = (
 _DUT_PAGE_INDEX = 4
 _INSTRUMENT_PAGE_INDEX = 5
 _BOLOMETER_ASIC_PAGE_INDEX = 6
+_ASIC_SERVER_DEFAULT_PORT = 5000
 
 _TCP_PROBER_TYPES = frozenset(
     {ProberType.SUSS, ProberType.MPI_TP80, ProberType.MPI_TS2000}
@@ -464,7 +465,7 @@ class GuidedSetupWindow(QMainWindow):
         self.edit_asic_server_ip.setFixedWidth(130)
         tcp_row.addWidget(self.edit_asic_server_ip)
         tcp_row.addWidget(QLabel("Port:"))
-        self.edit_asic_server_port = QLineEdit(str(DEFAULT_BMT_TCP_PORT))
+        self.edit_asic_server_port = QLineEdit(str(_ASIC_SERVER_DEFAULT_PORT))
         self.edit_asic_server_port.setFixedWidth(60)
         tcp_row.addWidget(self.edit_asic_server_port)
         self.btn_asic_tcp_connect = QPushButton("Connect")
