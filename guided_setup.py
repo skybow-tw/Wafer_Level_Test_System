@@ -235,18 +235,18 @@ def _bolometer_icon(model: BmModelType, selected: bool = False) -> QIcon:
     """Show the sensor array geometry using one square per element."""
     rows, columns = {
         BmModelType.BM28: (2, 8),
-        BmModelType.BM1602: (16, 12),
-        BmModelType.BM6402: (20, 20),
-        BmModelType.BM12801: (40, 40),
+        BmModelType.BM1602: (12, 16),
+        BmModelType.BM6402: (48, 64),
+        BmModelType.BM12801: (96, 128),
     }[model]
-    pixmap = QPixmap(160, 160)
+    pixmap = QPixmap(512, 512)
     pixmap.fill(Qt.GlobalColor.transparent)
     painter = QPainter(pixmap)
     color = QColor("#FFFFFF" if selected else "#1676B8")
-    cell = min(136 / columns, 136 / rows)
+    cell = min(440 / columns, 440 / rows)
     square = cell * (0.72 if cell >= 4 else 0.78)
-    left = (160 - columns * cell) / 2
-    top = (160 - rows * cell) / 2
+    left = (512 - columns * cell) / 2
+    top = (512 - rows * cell) / 2
     painter.setPen(Qt.PenStyle.NoPen)
     painter.setBrush(color)
     for row in range(rows):
@@ -289,24 +289,21 @@ def _dut_icon(dut: DutType, selected: bool = False) -> QIcon:
 
 
 def _function_test_icon(selected: bool = False) -> QIcon:
-    """Put a square wave and a DC level side by side."""
-    pixmap = QPixmap(120, 72)
+    """Draw the Function Test square wave."""
+    pixmap = QPixmap(72, 72)
     pixmap.fill(Qt.GlobalColor.transparent)
     painter = QPainter(pixmap)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     color = QColor("#FFFFFF" if selected else "#1676B8")
     painter.setPen(QPen(color, 4, Qt.PenStyle.SolidLine,
                         Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
-    painter.drawLine(6, 50, 16, 50)
-    painter.drawLine(16, 50, 16, 23)
-    painter.drawLine(16, 23, 32, 23)
-    painter.drawLine(32, 23, 32, 50)
-    painter.drawLine(32, 50, 48, 50)
-    painter.drawLine(48, 50, 48, 23)
-    painter.drawLine(48, 23, 55, 23)
-    painter.drawLine(72, 50, 78, 50)
-    painter.drawLine(78, 50, 78, 29)
-    painter.drawLine(78, 29, 111, 29)
+    painter.drawLine(7, 51, 16, 51)
+    painter.drawLine(16, 51, 16, 22)
+    painter.drawLine(16, 22, 32, 22)
+    painter.drawLine(32, 22, 32, 51)
+    painter.drawLine(32, 51, 48, 51)
+    painter.drawLine(48, 51, 48, 22)
+    painter.drawLine(48, 22, 64, 22)
     painter.end()
     return QIcon(pixmap)
 
@@ -562,12 +559,17 @@ class GuidedSetupWindow(QMainWindow):
                         _bolometer_icon(model, checked)
                     )
                 )
-            elif isinstance(value, DutType):
+            elif isinstance(value, (DutType, ImuSubType)):
+                dut = (
+                    DutType.ELEMENT
+                    if value in (DutType.ELEMENT, ImuSubType.COMPONENT)
+                    else DutType.ASIC
+                )
                 button.setProperty("illustratedChoice", "true")
-                button.setIcon(_dut_icon(value))
+                button.setIcon(_dut_icon(dut))
                 button.setIconSize(QSize(64, 64))
                 button.toggled.connect(
-                    lambda checked, btn=button, dut=value: btn.setIcon(
+                    lambda checked, btn=button, dut=dut: btn.setIcon(
                         _dut_icon(dut, checked)
                     )
                 )
@@ -616,7 +618,7 @@ class GuidedSetupWindow(QMainWindow):
         self.btn_function_test.setProperty("setupChoice", "true")
         self.btn_function_test.setProperty("illustratedChoice", "true")
         self.btn_function_test.setIcon(_function_test_icon())
-        self.btn_function_test.setIconSize(QSize(112, 68))
+        self.btn_function_test.setIconSize(QSize(68, 68))
         self.btn_function_test.toggled.connect(
             lambda checked: self.btn_function_test.setIcon(
                 _function_test_icon(checked)
