@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from PySide6.QtWidgets import QWidget
 
+    from instruments.bmt_tcp import BmtTcpClient
     from instruments.panels.base import InstrumentPanelBase
 
 VIRTUAL_LCR_INSTRUMENT_NAME = "VirtualLCR"
@@ -40,11 +41,14 @@ def create_modular_instrument_window(
     instrument_name: str,
     parent: QWidget | None = None,
     work_dir: Path | None = None,
+    asic_tcp_client: BmtTcpClient | None = None,
 ) -> InstrumentPanelBase | None:
     if instrument_name == FUNCTION_TEST_SPI_DAC_DISPLAY_NAME:
         from instruments.panels.function_test_window import FunctionTestWindow
 
-        return FunctionTestWindow(parent=parent, work_dir=work_dir)
+        return FunctionTestWindow(
+            parent=parent, work_dir=work_dir, tcp_client=asic_tcp_client
+        )
     if instrument_name == VIRTUAL_LCR_INSTRUMENT_NAME:
         from instruments.panels.virtual_lcr.window import VirtualLcrWindow
 

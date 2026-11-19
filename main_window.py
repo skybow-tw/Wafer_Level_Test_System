@@ -156,7 +156,10 @@ class MainWindow(QMainWindow):
         from instruments.panels.registry import create_modular_instrument_window
 
         window = create_modular_instrument_window(
-            instrument_name, parent=self, work_dir=self._work_dir
+            instrument_name,
+            parent=self,
+            work_dir=self._work_dir,
+            asic_tcp_client=self._asic_tcp_client,
         )
         if window is None:
             QMessageBox.information(

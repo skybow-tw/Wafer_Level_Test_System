@@ -10,14 +10,18 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QGroupBox,
     QHeaderView,
+    QHBoxLayout,
     QLabel,
     QLCDNumber,
+    QLineEdit,
+    QMessageBox,
     QPushButton,
     QTableWidget,
     QVBoxLayout,
     QWidget,
 )
 
+from instruments.bmt_tcp import BmtTcpClient
 from instruments.panels.base import InstrumentPanelBase
 
 
@@ -26,34 +30,74 @@ class FunctionTestWindow(InstrumentPanelBase):
         self,
         parent: QWidget | None = None,
         work_dir: Path | None = None,
+        tcp_client: BmtTcpClient | None = None,
     ) -> None:
         super().__init__("Function Test(SPI、DAC)", parent=parent, work_dir=work_dir)
-        self.setFixedSize(640, 480)
+        self._tcp_client = tcp_client
+        self.setFixedSize(850, 560)
         root = QWidget(self)
         layout = QVBoxLayout(root)
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(10)
 
-        self.start_button = QPushButton("Start Test")
+        button_row = QHBoxLayout()
+        button_row.setSpacing(6)
+        self.start_button = QPushButton("Full Test")
         self.start_button.setEnabled(False)
-        self.start_button.setToolTip("Test control is not connected yet")
-        layout.addWidget(self.start_button)
+        self.start_button.setToolTip("Full test workflow is not connected yet")
+        button_row.addWidget(self.start_button)
+        for label, command in (
+            ("CLK_EXT(1MHz)", "PI5, GenGPCLK,1MHz\n"),
+            ("Check PCLK", "PI5, PCLK_Check\n"),
+            ("Check V_SYNC", "PI5, V_SYNC_Check\n"),
+            ("Check H_SYNC", "PI5, H_SYNC_Check\n"),
+            ("Check Analog", "PI5, Read_Analog\n"),
+        ):
+            button = QPushButton(label)
+            button.setEnabled(tcp_client is not None and tcp_client.is_connected)
+            button.clicked.connect(
+                lambda _checked=False, payload=command: self._send_command(payload)
+            )
+            button_row.addWidget(button)
+        layout.addLayout(button_row)
 
-        clock = QGroupBox("Clock")
+        clock = QGroupBox("Pixel Signal")
         clock_layout = QGridLayout(clock)
+        clock_layout.setContentsMargins(16, 16, 16, 16)
+        clock_layout.setHorizontalSpacing(10)
+        clock_layout.setVerticalSpacing(8)
         clock_layout.setColumnStretch(1, 1)
-        for row, (name, value, unit) in enumerate((
-            ("PCLK", 10, "MHz"),
-            ("V_SYNC", 30, "Hz"),
-            ("H_SYNC", 16500, "Hz"),
+        for row, (name, status) in enumerate((
+            ("PCLK\nCheck", "PCLK OK"),
+            ("V_SYNC\nCheck", "30Hz OK"),
+            ("H_SYNC\nCheck", "16.5kHz OK"),
         )):
-            clock_layout.addWidget(QLabel(f"{name}:"), row, 0)
-            display = QLCDNumber(clock)
-            display.setDigitCount(6)
-            display.setSegmentStyle(QLCDNumber.SegmentStyle.Flat)
-            display.display(value)
+            label = QLabel(name)
+            label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            label.setMinimumHeight(52)
+            label.setFixedWidth(180)
+            label.setStyleSheet(
+                "background: #DCECF7; border: 1px solid #A4C8E2; font-size: 18px;"
+            )
+            clock_layout.addWidget(label, row, 0)
+            display = QLineEdit("--")
+            display.setReadOnly(True)
+            display.setAlignment(Qt.AlignmentFlag.AlignRight)
+            display.setMinimumHeight(36)
+            display.setStyleSheet("font-size: 18px; background: white;")
             clock_layout.addWidget(display, row, 1)
-            clock_layout.addWidget(QLabel(unit), row, 2)
+            unit = QLabel("Hz")
+            unit.setStyleSheet("font-size: 18px;")
+            clock_layout.addWidget(unit, row, 2)
+            lamp = QLabel()
+            lamp.setFixedSize(24, 24)
+            lamp.setStyleSheet(
+                "background: #444; border: 2px solid #666; border-radius: 12px;"
+            )
+            clock_layout.addWidget(lamp, row, 3)
+            status_label = QLabel(status)
+            status_label.setStyleSheet("font-size: 18px;")
+            clock_layout.addWidget(status_label, row, 4)
         layout.addWidget(clock)
 
         register_map = QGroupBox("Reg. Map")
@@ -95,6 +139,15 @@ class FunctionTestWindow(InstrumentPanelBase):
             analog_layout.addWidget(QLabel("V"), row, 2)
         layout.addWidget(analog)
         self.setCentralWidget(root)
+
+    def _send_command(self, command: str) -> None:
+        if self._tcp_client is None or not self._tcp_client.is_connected:
+            QMessageBox.warning(self, "TCP connection", "Server is not connected.")
+            return
+        try:
+            self._tcp_client.send(command)
+        except (OSError, RuntimeError) as exc:
+            QMessageBox.warning(self, "TCP command failed", str(exc))
 
     def start_measurement(
         self,
