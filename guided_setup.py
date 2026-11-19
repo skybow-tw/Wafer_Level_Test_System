@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
-from PySide6.QtCore import QObject, Qt, QTimer, Signal, QSize
+from PySide6.QtCore import QObject, Qt, QTimer, Signal, QSize, QRectF
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
@@ -160,25 +160,6 @@ def _connect_error_code(exc: BaseException) -> str:
 
 
 _GUIDED_SETUP_QSS = """
-QPushButton[deviceChoice="true"] {
-    background-color: #FFFFFF;
-    border: 2px solid #D7E3EE;
-    border-radius: 12px;
-    padding: 12px;
-}
-QPushButton[deviceChoice="true"]:hover {
-    background-color: #F0F7FD;
-    border-color: #69A8DA;
-}
-QPushButton[deviceChoice="true"]:checked {
-    background-color: #0078D4;
-    color: #FFFFFF;
-    border-color: #0078D4;
-}
-QPushButton[deviceChoice="true"]:checked:hover {
-    background-color: #106EBE;
-    border-color: #106EBE;
-}
 QPushButton[setupChoice="true"]:checked {
     background-color: #0078D4;
     color: #FFFFFF;
@@ -188,6 +169,25 @@ QPushButton[setupChoice="true"]:checked:hover {
     background-color: #106EBE;
     color: #FFFFFF;
     border: 1px solid #106EBE;
+}
+QPushButton[illustratedChoice="true"] {
+    background-color: #FFFFFF;
+    border: 2px solid #D7E3EE;
+    border-radius: 12px;
+    padding: 12px;
+}
+QPushButton[illustratedChoice="true"]:hover {
+    background-color: #F0F7FD;
+    border-color: #69A8DA;
+}
+QPushButton[illustratedChoice="true"]:checked {
+    background-color: #0078D4;
+    color: #FFFFFF;
+    border-color: #0078D4;
+}
+QPushButton[illustratedChoice="true"]:checked:hover {
+    background-color: #106EBE;
+    border-color: #106EBE;
 }
 """
 
@@ -227,6 +227,86 @@ def _device_icon(device: DeviceType, selected: bool = False) -> QIcon:
     else:
         for x, y in ((15, 15), (41, 15), (15, 41), (41, 41)):
             painter.drawRoundedRect(x, y, 16, 16, 4, 4)
+    painter.end()
+    return QIcon(pixmap)
+
+
+def _bolometer_icon(model: BmModelType, selected: bool = False) -> QIcon:
+    """Show the sensor array geometry using one square per element."""
+    rows, columns = {
+        BmModelType.BM28: (2, 8),
+        BmModelType.BM1602: (16, 12),
+        BmModelType.BM6402: (20, 20),
+        BmModelType.BM12801: (40, 40),
+    }[model]
+    pixmap = QPixmap(160, 160)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    color = QColor("#FFFFFF" if selected else "#1676B8")
+    cell = min(136 / columns, 136 / rows)
+    square = cell * (0.72 if cell >= 4 else 0.78)
+    left = (160 - columns * cell) / 2
+    top = (160 - rows * cell) / 2
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(color)
+    for row in range(rows):
+        for column in range(columns):
+            painter.drawRect(QRectF(
+                left + column * cell, top + row * cell, square, square
+            ))
+    painter.end()
+    return QIcon(pixmap)
+
+
+def _dut_icon(dut: DutType, selected: bool = False) -> QIcon:
+    pixmap = QPixmap(72, 72)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    color = QColor("#FFFFFF" if selected else "#1676B8")
+    painter.setPen(QPen(color, 3, Qt.PenStyle.SolidLine,
+                        Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    if dut == DutType.ELEMENT:
+        painter.drawRoundedRect(12, 25, 48, 30, 3, 3)
+        painter.drawLine(18, 32, 27, 32)
+        painter.drawLine(45, 32, 54, 32)
+        painter.drawEllipse(29, 28, 14, 14)
+        painter.drawLine(36, 42, 36, 48)
+        painter.drawLine(19, 18, 53, 18)
+        painter.drawLine(23, 18, 23, 25)
+        painter.drawLine(49, 18, 49, 25)
+    else:
+        painter.drawRoundedRect(17, 17, 38, 38, 4, 4)
+        painter.drawRoundedRect(26, 26, 20, 20, 2, 2)
+        for point in (26, 36, 46):
+            painter.drawLine(point, 10, point, 17)
+            painter.drawLine(point, 55, point, 62)
+            painter.drawLine(10, point, 17, point)
+            painter.drawLine(55, point, 62, point)
+    painter.end()
+    return QIcon(pixmap)
+
+
+def _function_test_icon(selected: bool = False) -> QIcon:
+    """Put a square wave and a DC level side by side."""
+    pixmap = QPixmap(120, 72)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    color = QColor("#FFFFFF" if selected else "#1676B8")
+    painter.setPen(QPen(color, 4, Qt.PenStyle.SolidLine,
+                        Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+    painter.drawLine(6, 50, 16, 50)
+    painter.drawLine(16, 50, 16, 23)
+    painter.drawLine(16, 23, 32, 23)
+    painter.drawLine(32, 23, 32, 50)
+    painter.drawLine(32, 50, 48, 50)
+    painter.drawLine(48, 50, 48, 23)
+    painter.drawLine(48, 23, 55, 23)
+    painter.drawLine(72, 50, 78, 50)
+    painter.drawLine(78, 50, 78, 29)
+    painter.drawLine(78, 29, 111, 29)
     painter.end()
     return QIcon(pixmap)
 
@@ -465,12 +545,30 @@ class GuidedSetupWindow(QMainWindow):
             button.setCheckable(True)
             button.setProperty("setupChoice", "true")
             if isinstance(value, DeviceType):
-                button.setProperty("deviceChoice", "true")
+                button.setProperty("illustratedChoice", "true")
                 button.setIcon(_device_icon(value))
                 button.setIconSize(QSize(64, 64))
                 button.toggled.connect(
                     lambda checked, btn=button, device=value: btn.setIcon(
                         _device_icon(device, checked)
+                    )
+                )
+            elif isinstance(value, BmModelType):
+                button.setProperty("illustratedChoice", "true")
+                button.setIcon(_bolometer_icon(value))
+                button.setIconSize(QSize(88, 88))
+                button.toggled.connect(
+                    lambda checked, btn=button, model=value: btn.setIcon(
+                        _bolometer_icon(model, checked)
+                    )
+                )
+            elif isinstance(value, DutType):
+                button.setProperty("illustratedChoice", "true")
+                button.setIcon(_dut_icon(value))
+                button.setIconSize(QSize(64, 64))
+                button.toggled.connect(
+                    lambda checked, btn=button, dut=value: btn.setIcon(
+                        _dut_icon(dut, checked)
                     )
                 )
             button.setMinimumHeight(56)
@@ -516,6 +614,14 @@ class GuidedSetupWindow(QMainWindow):
         self.btn_function_test = QPushButton("Function Test\n(SPI、DAC)")
         self.btn_function_test.setCheckable(True)
         self.btn_function_test.setProperty("setupChoice", "true")
+        self.btn_function_test.setProperty("illustratedChoice", "true")
+        self.btn_function_test.setIcon(_function_test_icon())
+        self.btn_function_test.setIconSize(QSize(112, 68))
+        self.btn_function_test.toggled.connect(
+            lambda checked: self.btn_function_test.setIcon(
+                _function_test_icon(checked)
+            )
+        )
         self.btn_function_test.setMinimumHeight(56)
         self.btn_function_test.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
