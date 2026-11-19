@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
-from PySide6.QtCore import QObject, Qt, QTimer, Signal
-from PySide6.QtGui import QFont
+from PySide6.QtCore import QObject, Qt, QTimer, Signal, QSize
+from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
@@ -160,6 +160,25 @@ def _connect_error_code(exc: BaseException) -> str:
 
 
 _GUIDED_SETUP_QSS = """
+QPushButton[deviceChoice="true"] {
+    background-color: #FFFFFF;
+    border: 2px solid #D7E3EE;
+    border-radius: 12px;
+    padding: 12px;
+}
+QPushButton[deviceChoice="true"]:hover {
+    background-color: #F0F7FD;
+    border-color: #69A8DA;
+}
+QPushButton[deviceChoice="true"]:checked {
+    background-color: #0078D4;
+    color: #FFFFFF;
+    border-color: #0078D4;
+}
+QPushButton[deviceChoice="true"]:checked:hover {
+    background-color: #106EBE;
+    border-color: #106EBE;
+}
 QPushButton[setupChoice="true"]:checked {
     background-color: #0078D4;
     color: #FFFFFF;
@@ -171,6 +190,45 @@ QPushButton[setupChoice="true"]:checked:hover {
     border: 1px solid #106EBE;
 }
 """
+
+
+def _device_icon(device: DeviceType, selected: bool = False) -> QIcon:
+    """Draw compact, resolution-independent pictograms for the device cards."""
+    pixmap = QPixmap(72, 72)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(QPen(QColor("#FFFFFF" if selected else "#1676B8"), 4,
+                        Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
+                        Qt.PenJoinStyle.RoundJoin))
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    if device == DeviceType.IMU:
+        painter.drawRoundedRect(18, 18, 36, 36, 6, 6)
+        for point in (25, 36, 47):
+            painter.drawLine(point, 11, point, 18)
+            painter.drawLine(point, 54, point, 61)
+            painter.drawLine(11, point, 18, point)
+            painter.drawLine(54, point, 61, point)
+        painter.drawLine(27, 43, 36, 28)
+        painter.drawLine(36, 28, 45, 43)
+    elif device == DeviceType.BOLOMETER:
+        painter.drawRoundedRect(14, 14, 44, 44, 7, 7)
+        painter.drawEllipse(25, 25, 22, 22)
+        painter.drawLine(36, 5, 36, 14)
+        painter.drawLine(36, 58, 36, 67)
+        painter.drawLine(5, 36, 14, 36)
+        painter.drawLine(58, 36, 67, 36)
+    elif device == DeviceType.GYRO:
+        painter.drawEllipse(13, 13, 46, 46)
+        painter.drawEllipse(28, 28, 16, 16)
+        painter.drawArc(5, 5, 62, 62, 35 * 16, 110 * 16)
+        painter.drawLine(54, 12, 62, 14)
+        painter.drawLine(62, 14, 60, 22)
+    else:
+        for x, y in ((15, 15), (41, 15), (15, 41), (41, 41)):
+            painter.drawRoundedRect(x, y, 16, 16, 4, 4)
+    painter.end()
+    return QIcon(pixmap)
 
 
 class _TcpConnectBridge(QObject):
@@ -406,6 +464,15 @@ class GuidedSetupWindow(QMainWindow):
             button = QPushButton(label)
             button.setCheckable(True)
             button.setProperty("setupChoice", "true")
+            if isinstance(value, DeviceType):
+                button.setProperty("deviceChoice", "true")
+                button.setIcon(_device_icon(value))
+                button.setIconSize(QSize(64, 64))
+                button.toggled.connect(
+                    lambda checked, btn=button, device=value: btn.setIcon(
+                        _device_icon(device, checked)
+                    )
+                )
             button.setMinimumHeight(56)
             button.setSizePolicy(
                 QSizePolicy.Policy.Expanding,
