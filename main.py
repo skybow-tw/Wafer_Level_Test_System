@@ -9,6 +9,7 @@ from datetime import datetime
 from pathlib import Path
 
 from main_window import run_app, run_instrument_app
+from instruments.panels.registry import FUNCTION_TEST_SPI_DAC_DISPLAY_NAME
 
 _LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
 _LOG_DATEFMT = "%H:%M:%S"
@@ -19,6 +20,7 @@ _INSTRUMENT_ONLY_FLAGS: tuple[tuple[str, str], ...] = (
     ("bmt3000", "BMT3000"),
     ("bmt5000", "BMT5000"),
     ("dsa", "DSA"),
+    ("roic", FUNCTION_TEST_SPI_DAC_DISPLAY_NAME),
 )
 
 
@@ -64,6 +66,11 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         "--dsa",
         action="store_true",
         help="僅開啟 DSA 儀器控制視窗（略過導引與主畫面）",
+    )
+    instrument_group.add_argument(
+        "-ROIC", "--roic",
+        action="store_true",
+        help="Open the Bolometer ASIC Function Test window directly.",
     )
     return parser.parse_args(argv)
 
