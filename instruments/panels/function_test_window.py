@@ -62,6 +62,7 @@ class FunctionTestWindow(InstrumentPanelBase):
         layout.addLayout(button_row)
 
         clock = QGroupBox("Digital_Clock")
+        clock.setFixedWidth(700)
         clock_layout = QGridLayout(clock)
         clock_layout.setContentsMargins(16, 12, 16, 10)
         clock_layout.setHorizontalSpacing(10)
@@ -102,6 +103,7 @@ class FunctionTestWindow(InstrumentPanelBase):
         layout.addWidget(clock)
 
         register_map = QGroupBox("Digital_SPI")
+        register_map.setFixedWidth(700)
         register_layout = QVBoxLayout(register_map)
         register_layout.setContentsMargins(10, 10, 10, 10)
         self.register_table = QTableWidget(20, 3, register_map)
@@ -128,6 +130,7 @@ class FunctionTestWindow(InstrumentPanelBase):
         layout.addWidget(register_map)
 
         analog = QGroupBox("Analog Test")
+        analog.setFixedWidth(700)
         analog_layout = QGridLayout(analog)
         analog_layout.setColumnStretch(3, 1)
         for row, name in enumerate(("BGR current", "DAC_V1", "DAC_V2", "DAC_V3")):
