@@ -32,7 +32,7 @@ class FunctionTestWindow(InstrumentPanelBase):
         work_dir: Path | None = None,
         tcp_client: BmtTcpClient | None = None,
     ) -> None:
-        super().__init__("Function Test(SPI、DAC)", parent=parent, work_dir=work_dir)
+        super().__init__("Bolometer ROIC", parent=parent, work_dir=work_dir)
         self._tcp_client = tcp_client
         self.setFixedSize(850, 560)
         root = QWidget(self)
