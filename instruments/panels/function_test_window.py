@@ -32,7 +32,7 @@ class FunctionTestWindow(InstrumentPanelBase):
         work_dir: Path | None = None,
         tcp_client: BmtTcpClient | None = None,
     ) -> None:
-        super().__init__("Bolometer ROIC Function Test", parent=parent, work_dir=work_dir)
+        super().__init__("Bolometer ROIC Function Tester (RPI5)", parent=parent, work_dir=work_dir)
         self._tcp_client = tcp_client
         self.setFixedSize(850, 560)
         root = QWidget(self)
@@ -61,12 +61,12 @@ class FunctionTestWindow(InstrumentPanelBase):
             button_row.addWidget(button)
         layout.addLayout(button_row)
 
-        clock = QGroupBox("Digital (CLOCK)")
+        clock = QGroupBox("Digital_Clock")
         clock_layout = QGridLayout(clock)
         clock_layout.setContentsMargins(16, 12, 16, 10)
         clock_layout.setHorizontalSpacing(10)
         clock_layout.setVerticalSpacing(5)
-        clock_layout.setColumnStretch(1, 1)
+        clock_layout.setColumnStretch(5, 1)
         for row, (name, status) in enumerate((
             ("PCLK Check", "PCLK OK"),
             ("V_SYNC Check", "30Hz OK"),
@@ -85,6 +85,7 @@ class FunctionTestWindow(InstrumentPanelBase):
             display.setAlignment(Qt.AlignmentFlag.AlignRight)
             display.setFixedHeight(32)
             display.setStyleSheet("font-size: 18px; background: white;")
+            display.setFixedWidth(190)
             clock_layout.addWidget(display, row, 1)
             unit = QLabel("Hz")
             unit.setStyleSheet("font-size: 18px;")
@@ -100,7 +101,7 @@ class FunctionTestWindow(InstrumentPanelBase):
             clock_layout.addWidget(status_label, row, 4)
         layout.addWidget(clock)
 
-        register_map = QGroupBox("Digital( SPI / Reg. map)")
+        register_map = QGroupBox("Digital_SPI")
         register_layout = QVBoxLayout(register_map)
         register_layout.setContentsMargins(10, 10, 10, 10)
         self.register_table = QTableWidget(20, 3, register_map)
@@ -126,13 +127,14 @@ class FunctionTestWindow(InstrumentPanelBase):
         register_layout.addWidget(self.register_table)
         layout.addWidget(register_map)
 
-        analog = QGroupBox("Analog (BGR/ DAC)")
+        analog = QGroupBox("Analog Test")
         analog_layout = QGridLayout(analog)
-        analog_layout.setColumnStretch(1, 1)
+        analog_layout.setColumnStretch(3, 1)
         for row, name in enumerate(("BGR current", "DAC_V1", "DAC_V2", "DAC_V3")):
             analog_layout.addWidget(QLabel(f"{name}:"), row, 0)
             display = QLCDNumber(analog)
             display.setDigitCount(6)
+            display.setFixedWidth(100)
             display.setSegmentStyle(QLCDNumber.SegmentStyle.Flat)
             display.display("--")
             analog_layout.addWidget(display, row, 1)
