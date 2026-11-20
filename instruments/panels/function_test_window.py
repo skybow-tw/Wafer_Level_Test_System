@@ -32,7 +32,7 @@ class FunctionTestWindow(InstrumentPanelBase):
         work_dir: Path | None = None,
         tcp_client: BmtTcpClient | None = None,
     ) -> None:
-        super().__init__("Bolometer ROIC", parent=parent, work_dir=work_dir)
+        super().__init__("Bolometer ROIC Function Test", parent=parent, work_dir=work_dir)
         self._tcp_client = tcp_client
         self.setFixedSize(850, 560)
         root = QWidget(self)
@@ -63,18 +63,18 @@ class FunctionTestWindow(InstrumentPanelBase):
 
         clock = QGroupBox("Digital (CLOCK)")
         clock_layout = QGridLayout(clock)
-        clock_layout.setContentsMargins(16, 16, 16, 16)
+        clock_layout.setContentsMargins(16, 12, 16, 10)
         clock_layout.setHorizontalSpacing(10)
-        clock_layout.setVerticalSpacing(8)
+        clock_layout.setVerticalSpacing(5)
         clock_layout.setColumnStretch(1, 1)
         for row, (name, status) in enumerate((
-            ("PCLK\nCheck", "PCLK OK"),
-            ("V_SYNC\nCheck", "30Hz OK"),
-            ("H_SYNC\nCheck", "16.5kHz OK"),
+            ("PCLK Check", "PCLK OK"),
+            ("V_SYNC Check", "30Hz OK"),
+            ("H_SYNC Check", "16.5kHz OK"),
         )):
             label = QLabel(name)
             label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            label.setMinimumHeight(52)
+            label.setFixedHeight(32)
             label.setFixedWidth(180)
             label.setStyleSheet(
                 "background: #DCECF7; border: 1px solid #A4C8E2; font-size: 14px;"
@@ -83,7 +83,7 @@ class FunctionTestWindow(InstrumentPanelBase):
             display = QLineEdit("--")
             display.setReadOnly(True)
             display.setAlignment(Qt.AlignmentFlag.AlignRight)
-            display.setMinimumHeight(36)
+            display.setFixedHeight(32)
             display.setStyleSheet("font-size: 18px; background: white;")
             clock_layout.addWidget(display, row, 1)
             unit = QLabel("Hz")
