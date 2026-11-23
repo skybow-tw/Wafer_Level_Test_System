@@ -227,7 +227,7 @@ def _tp80_icon(selected: bool = False) -> QIcon:
 
 
 def _suss_icon(selected: bool = False) -> QIcon:
-    """Draw the PA200 console, microscope, probe stage, and support frame."""
+    """Draw the PA200 microscope, probe stage, and front guard."""
     pixmap = QPixmap(96, 96)
     pixmap.fill(Qt.GlobalColor.transparent)
     painter = QPainter(pixmap)
@@ -236,30 +236,28 @@ def _suss_icon(selected: bool = False) -> QIcon:
     painter.setPen(QPen(color, 2, Qt.PenStyle.SolidLine,
                         Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.MiterJoin))
     painter.setBrush(Qt.BrushStyle.NoBrush)
-    painter.drawRect(5, 18, 27, 24)  # angled control console
-    painter.drawRect(8, 21, 21, 11)
-    for x in (10, 16, 22):
-        painter.drawLine(x, 36, x + 2, 36)
-    painter.drawLine(23, 42, 23, 50)
-    painter.drawLine(19, 50, 29, 50)
-    painter.drawLine(27, 14, 27, 18)  # joystick
-    painter.drawEllipse(25, 11, 4, 4)
-    painter.drawRect(50, 12, 24, 8)  # microscope head
-    painter.drawEllipse(53, 8, 5, 5)
-    painter.drawEllipse(66, 8, 5, 5)
-    painter.drawLine(55, 20, 58, 31)
-    painter.drawLine(69, 20, 66, 31)
-    painter.drawEllipse(53, 29, 18, 12)
-    painter.drawLine(59, 41, 59, 47)
-    painter.drawLine(53, 47, 65, 47)
-    painter.drawLine(31, 49, 50, 49)  # wafer stage
-    painter.drawEllipse(38, 46, 16, 5)
-    painter.drawRect(9, 52, 78, 23)  # instrument cabinet
-    painter.drawLine(36, 52, 36, 75)
-    painter.drawLine(64, 52, 64, 75)
-    painter.drawLine(5, 78, 91, 78)  # supporting table and legs
-    painter.drawRect(12, 79, 7, 14)
-    painter.drawRect(78, 79, 7, 14)
+    # Vertical camera and objective with the angled support behind them.
+    painter.drawRect(43, 7, 12, 10)
+    painter.drawRect(45, 17, 8, 25)
+    painter.drawRoundedRect(43, 42, 12, 12, 2, 2)
+    painter.drawLine(45, 48, 53, 48)
+    painter.drawLine(45, 25, 38, 25)
+    painter.drawLine(38, 25, 29, 38)
+    painter.drawLine(29, 38, 29, 44)
+    painter.drawEllipse(56, 24, 6, 6)
+
+    # Opposing probe arms aimed at the round wafer stage.
+    painter.drawRect(14, 46, 15, 8)
+    painter.drawRect(67, 46, 15, 8)
+    painter.drawLine(29, 50, 38, 56)
+    painter.drawLine(67, 50, 58, 56)
+    painter.drawEllipse(31, 56, 34, 8)
+
+    # Wide cabinet, front guard, and handle.
+    painter.drawRoundedRect(6, 64, 84, 24, 4, 4)
+    painter.drawRect(30, 67, 36, 12)
+    painter.drawRoundedRect(40, 81, 16, 4, 2, 2)
+    painter.drawEllipse(75, 73, 6, 6)
     painter.end()
     return _prober_icon(pixmap)
 
