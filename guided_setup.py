@@ -226,6 +226,39 @@ def _tp80_icon(selected: bool = False) -> QIcon:
     return _prober_icon(pixmap)
 
 
+def _ts2000_icon(selected: bool = False) -> QIcon:
+    """Draw the TS2000 probe column, monitor, and cabinet."""
+    pixmap = QPixmap(96, 96)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(QPen(QColor("#FFFFFF" if selected else "#1676B8"), 2))
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+
+    painter.drawRoundedRect(28, 7, 9, 34, 2, 2)
+    painter.drawLine(32, 41, 32, 45)
+    painter.drawEllipse(20, 44, 24, 7)
+    painter.drawLine(15, 34, 28, 34)
+    painter.drawLine(15, 34, 15, 46)
+    painter.drawLine(37, 34, 49, 34)
+    painter.drawLine(49, 34, 49, 46)
+
+    painter.drawRoundedRect(55, 13, 33, 21, 2, 2)
+    painter.drawEllipse(66, 18, 11, 11)
+    painter.drawLine(72, 34, 72, 45)
+    painter.drawLine(65, 45, 79, 45)
+
+    painter.drawRoundedRect(7, 53, 82, 34, 3, 3)
+    painter.drawLine(7, 64, 89, 64)
+    painter.drawLine(57, 53, 57, 87)
+    painter.drawRect(14, 56, 35, 5)
+    painter.drawEllipse(74, 69, 6, 6)
+    painter.drawLine(15, 87, 15, 91)
+    painter.drawLine(81, 87, 81, 91)
+    painter.end()
+    return _prober_icon(pixmap)
+
+
 def _suss_icon(selected: bool = False) -> QIcon:
     """Draw the PA200 microscope, probe stage, and front guard."""
     pixmap = QPixmap(96, 96)
@@ -531,6 +564,7 @@ class GuidedSetupWindow(QMainWindow):
             icon_factory = {
                 ProberType.MPI_TP80: _tp80_icon,
                 ProberType.SUSS: _suss_icon,
+                ProberType.MPI_TS2000: _ts2000_icon,
             }.get(prober_type)
             if icon_factory is not None:
                 button.setProperty("illustratedChoice", "true")
