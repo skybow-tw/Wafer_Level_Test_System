@@ -200,7 +200,7 @@ def _prober_icon(pixmap: QPixmap) -> QIcon:
 
 
 def _tp80_icon(selected: bool = False) -> QIcon:
-    """Draw the probe and left-hand cabinet from the TP80 reference."""
+    """Draw the TP80 enclosure, probe assembly, and control panel."""
     pixmap = QPixmap(96, 96)
     pixmap.fill(Qt.GlobalColor.transparent)
     painter = QPainter(pixmap)
@@ -209,23 +209,19 @@ def _tp80_icon(selected: bool = False) -> QIcon:
     painter.setPen(QPen(color, 2, Qt.PenStyle.SolidLine,
                         Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.MiterJoin))
     painter.setBrush(Qt.BrushStyle.NoBrush)
-    painter.drawRect(7, 39, 82, 48)
-    painter.drawLine(7, 60, 89, 60)
-    painter.drawRect(14, 28, 18, 10)
-    painter.drawRect(64, 28, 18, 10)
-    painter.drawLine(23, 25, 23, 28)
-    painter.drawLine(73, 25, 73, 28)
-    painter.drawRect(15, 70, 18, 6)
-    painter.drawRect(15, 80, 18, 6)
-    painter.drawLine(32, 34, 42, 34)
-    painter.drawLine(54, 34, 64, 34)
-    painter.drawLine(42, 32, 47, 39)
-    painter.drawLine(54, 32, 49, 39)
-    painter.drawLine(43, 8, 43, 22)
-    painter.drawLine(43, 8, 53, 8)
-    painter.drawLine(53, 8, 53, 22)
-    painter.drawArc(43, 17, 10, 10, 180 * 16, 180 * 16)
-    painter.drawRect(36, 40, 24, 6)
+    painter.drawRoundedRect(7, 6, 82, 84, 6, 6)
+    painter.drawRect(15, 15, 66, 51)
+    painter.drawLine(7, 73, 89, 73)
+    painter.drawRoundedRect(43, 23, 10, 22, 3, 3)
+    painter.drawRect(22, 43, 13, 9)
+    painter.drawRect(61, 43, 13, 9)
+    painter.drawLine(35, 47, 40, 47)
+    painter.drawLine(56, 47, 61, 47)
+    painter.drawLine(40, 47, 45, 54)
+    painter.drawLine(56, 47, 51, 54)
+    painter.drawRect(36, 57, 24, 4)
+    painter.drawRect(17, 79, 25, 5)
+    painter.drawEllipse(72, 78, 7, 7)
     painter.end()
     return _prober_icon(pixmap)
 
