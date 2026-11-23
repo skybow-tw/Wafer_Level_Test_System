@@ -190,6 +190,15 @@ QPushButton[illustratedChoice="true"]:checked:hover {
 """
 
 
+def _prober_icon(pixmap: QPixmap) -> QIcon:
+    """Keep hover from recoloring the icon; checked color is drawn separately."""
+    icon = QIcon()
+    for mode in (QIcon.Mode.Normal, QIcon.Mode.Active, QIcon.Mode.Selected):
+        for state in (QIcon.State.Off, QIcon.State.On):
+            icon.addPixmap(pixmap, mode, state)
+    return icon
+
+
 def _tp80_icon(selected: bool = False) -> QIcon:
     """Draw the probe and left-hand cabinet from the TP80 reference."""
     pixmap = QPixmap(96, 96)
@@ -218,7 +227,45 @@ def _tp80_icon(selected: bool = False) -> QIcon:
     painter.drawArc(43, 17, 10, 10, 180 * 16, 180 * 16)
     painter.drawRect(36, 40, 24, 6)
     painter.end()
-    return QIcon(pixmap)
+    return _prober_icon(pixmap)
+
+
+def _suss_icon(selected: bool = False) -> QIcon:
+    """Draw the PA200 console, microscope, probe stage, and support frame."""
+    pixmap = QPixmap(96, 96)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    color = QColor("#FFFFFF" if selected else "#1676B8")
+    painter.setPen(QPen(color, 2, Qt.PenStyle.SolidLine,
+                        Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.MiterJoin))
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    painter.drawRect(5, 18, 27, 24)  # angled control console
+    painter.drawRect(8, 21, 21, 11)
+    for x in (10, 16, 22):
+        painter.drawLine(x, 36, x + 2, 36)
+    painter.drawLine(23, 42, 23, 50)
+    painter.drawLine(19, 50, 29, 50)
+    painter.drawLine(27, 14, 27, 18)  # joystick
+    painter.drawEllipse(25, 11, 4, 4)
+    painter.drawRect(50, 12, 24, 8)  # microscope head
+    painter.drawEllipse(53, 8, 5, 5)
+    painter.drawEllipse(66, 8, 5, 5)
+    painter.drawLine(55, 20, 58, 31)
+    painter.drawLine(69, 20, 66, 31)
+    painter.drawEllipse(53, 29, 18, 12)
+    painter.drawLine(59, 41, 59, 47)
+    painter.drawLine(53, 47, 65, 47)
+    painter.drawLine(31, 49, 50, 49)  # wafer stage
+    painter.drawEllipse(38, 46, 16, 5)
+    painter.drawRect(9, 52, 78, 23)  # instrument cabinet
+    painter.drawLine(36, 52, 36, 75)
+    painter.drawLine(64, 52, 64, 75)
+    painter.drawLine(5, 78, 91, 78)  # supporting table and legs
+    painter.drawRect(12, 79, 7, 14)
+    painter.drawRect(78, 79, 7, 14)
+    painter.end()
+    return _prober_icon(pixmap)
 
 
 def _device_icon(device: DeviceType, selected: bool = False) -> QIcon:
@@ -487,11 +534,17 @@ class GuidedSetupWindow(QMainWindow):
             button = QPushButton(label)
             button.setCheckable(True)
             button.setProperty("setupChoice", "true")
-            if prober_type == ProberType.MPI_TP80:
-                button.setIcon(_tp80_icon())
+            icon_factory = {
+                ProberType.MPI_TP80: _tp80_icon,
+                ProberType.SUSS: _suss_icon,
+            }.get(prober_type)
+            if icon_factory is not None:
+                button.setIcon(icon_factory())
                 button.setIconSize(QSize(96, 96))
                 button.toggled.connect(
-                    lambda checked, btn=button: btn.setIcon(_tp80_icon(checked))
+                    lambda checked, btn=button, factory=icon_factory: btn.setIcon(
+                        factory(checked)
+                    )
                 )
             button.setMinimumHeight(56)
             button.setSizePolicy(
