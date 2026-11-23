@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import select
 import socket
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,19 @@ class BmtTcpClient:
     @property
     def remote_endpoint(self) -> tuple[str, int] | None:
         return self._remote
+
+    def check_connection(self) -> bool:
+        """Detect a closed peer without consuming any pending response data."""
+        sock = self._socket
+        if not self.is_connected or sock is None:
+            return False
+        try:
+            readable, _, exceptional = select.select([sock], [], [sock], 0)
+            if exceptional or (readable and not sock.recv(1, socket.MSG_PEEK)):
+                self.disconnect()
+        except OSError:
+            self.disconnect()
+        return self.is_connected
 
     def connect(
         self,

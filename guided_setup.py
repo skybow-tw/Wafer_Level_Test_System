@@ -336,6 +336,9 @@ class GuidedSetupWindow(QMainWindow):
         self._asic_connecting = False
         self._asic_connect_bridge = _TcpConnectBridge()
         self._asic_connect_bridge.finished.connect(self._on_asic_tcp_connect_finished)
+        self._asic_connection_timer = QTimer(self)
+        self._asic_connection_timer.setInterval(200)
+        self._asic_connection_timer.timeout.connect(self._check_asic_tcp_connection)
         self._tcp_connect_bridge = _TcpConnectBridge()
         self._tcp_connect_bridge.finished.connect(self._on_tcp_connect_finished)
         self._tcp_connecting = False
@@ -770,6 +773,7 @@ class GuidedSetupWindow(QMainWindow):
 
     def _on_asic_instrument_selected(self, checked: bool) -> None:
         if not checked and self._asic_tcp_client.is_connected:
+            self._asic_connection_timer.stop()
             self._asic_tcp_client.disconnect()
             self.lbl_asic_tcp_status.setText("請連接 Server")
         self._selected_instrument = (
@@ -779,6 +783,7 @@ class GuidedSetupWindow(QMainWindow):
 
     def _on_asic_tcp_connect_clicked(self) -> None:
         if self._asic_tcp_client.is_connected:
+            self._asic_connection_timer.stop()
             self._asic_tcp_client.disconnect()
             self.lbl_asic_tcp_status.setText("請連接 Server")
             self._update_asic_tcp_panel()
@@ -818,9 +823,17 @@ class GuidedSetupWindow(QMainWindow):
                 self.edit_asic_server_ip.text(),
                 int(self.edit_asic_server_port.text()),
             )
+            self._asic_connection_timer.start()
         self.lbl_asic_tcp_status.setText(
             "TCP 已連接" if success else f"連線失敗 ({error_code or 'unknown'})"
         )
+        self._update_asic_tcp_panel()
+
+    def _check_asic_tcp_connection(self) -> None:
+        if self._asic_tcp_client.check_connection():
+            return
+        self._asic_connection_timer.stop()
+        self.lbl_asic_tcp_status.setText("請連接 Server")
         self._update_asic_tcp_panel()
 
     def _apply_choice_button_font(self, button: QPushButton, checked: bool) -> None:
@@ -1294,6 +1307,7 @@ class GuidedSetupWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:
         self._stop_xy_velocity_move()
+        self._asic_connection_timer.stop()
         if not self._completed:
             self._disconnect_tcp()
             self._asic_tcp_client.disconnect()
