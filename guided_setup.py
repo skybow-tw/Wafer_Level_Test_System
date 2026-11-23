@@ -539,6 +539,7 @@ class GuidedSetupWindow(QMainWindow):
                 ProberType.SUSS: _suss_icon,
             }.get(prober_type)
             if icon_factory is not None:
+                button.setProperty("illustratedChoice", "true")
                 button.setIcon(icon_factory())
                 button.setIconSize(QSize(96, 96))
                 button.toggled.connect(
