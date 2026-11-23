@@ -224,12 +224,14 @@ def _device_icon(device: DeviceType, selected: bool = False) -> QIcon:
             painter.drawEllipse(QRectF(-5, -11, 10, 22))
             painter.restore()
     elif device == DeviceType.BOLOMETER:
-        painter.drawRoundedRect(14, 14, 44, 44, 7, 7)
-        painter.drawEllipse(25, 25, 22, 22)
-        painter.drawLine(36, 5, 36, 14)
-        painter.drawLine(36, 58, 36, 67)
-        painter.drawLine(5, 36, 14, 36)
-        painter.drawLine(58, 36, 67, 36)
+        color = QColor("#FFFFFF" if selected else "#1676B8")
+        painter.setPen(QPen(color, 3))
+        painter.drawRect(8, 8, 56, 56)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(color)
+        for row in range(3):
+            for column in range(3):
+                painter.drawRect(17 + column * 14, 17 + row * 14, 10, 10)
     elif device == DeviceType.GYRO:
         painter.drawEllipse(13, 13, 46, 46)
         painter.drawEllipse(28, 28, 16, 16)
