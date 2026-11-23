@@ -40,7 +40,6 @@ from theme_config import THEMES, generate_theme_qss
 class DeviceType(Enum):
     IMU = "IMU"
     BOLOMETER = "Bolometer"
-    GYRO = "Gyro"
     OTHERS = "Others"
 
 
@@ -94,7 +93,6 @@ _PROBER_BUTTONS: tuple[tuple[str, ProberType], ...] = (
 _DEVICE_BUTTONS: tuple[tuple[str, DeviceType], ...] = (
     ("IMU", DeviceType.IMU),
     ("Bolometer", DeviceType.BOLOMETER),
-    ("Gyro", DeviceType.GYRO),
     ("Others", DeviceType.OTHERS),
 )
 
@@ -232,12 +230,6 @@ def _device_icon(device: DeviceType, selected: bool = False) -> QIcon:
         for row in range(3):
             for column in range(3):
                 painter.drawRect(17 + column * 14, 17 + row * 14, 10, 10)
-    elif device == DeviceType.GYRO:
-        painter.drawEllipse(13, 13, 46, 46)
-        painter.drawEllipse(28, 28, 16, 16)
-        painter.drawArc(5, 5, 62, 62, 35 * 16, 110 * 16)
-        painter.drawLine(54, 12, 62, 14)
-        painter.drawLine(62, 14, 60, 22)
     else:
         for x, y in ((15, 15), (41, 15), (15, 41), (41, 41)):
             painter.drawRoundedRect(x, y, 16, 16, 4, 4)
@@ -1258,12 +1250,6 @@ class GuidedSetupWindow(QMainWindow):
                 self.btn_next.setText("下一步")
                 self.btn_next.setEnabled(self._selected_imu_subtype is not None)
                 self._update_prev_button()
-                return
-            if self._selected_device == DeviceType.GYRO:
-                self._show_instrument_page(
-                    _TRADITIONAL_INSTRUMENT_BUTTONS,
-                    back_index=1,
-                )
                 return
             if self._selected_device == DeviceType.OTHERS:
                 self._show_instrument_page(
