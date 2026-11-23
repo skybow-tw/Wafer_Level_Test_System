@@ -203,14 +203,26 @@ def _device_icon(device: DeviceType, selected: bool = False) -> QIcon:
                         Qt.PenJoinStyle.RoundJoin))
     painter.setBrush(Qt.BrushStyle.NoBrush)
     if device == DeviceType.IMU:
-        painter.drawRoundedRect(18, 18, 36, 36, 6, 6)
-        for point in (25, 36, 47):
-            painter.drawLine(point, 11, point, 18)
-            painter.drawLine(point, 54, point, 61)
-            painter.drawLine(11, point, 18, point)
-            painter.drawLine(54, point, 61, point)
-        painter.drawLine(27, 43, 36, 28)
-        painter.drawLine(36, 28, 45, 43)
+        painter.setPen(QPen(QColor("#FFFFFF" if selected else "#417B90"), 3,
+                            Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
+                            Qt.PenJoinStyle.RoundJoin))
+        # Three motion axes with rotation rings, matching the IMU reference.
+        painter.drawLine(36, 43, 36, 5)
+        painter.drawLine(26, 15, 36, 5)
+        painter.drawLine(36, 5, 46, 15)
+        painter.drawEllipse(QRectF(24, 23, 24, 10))
+        painter.drawLine(36, 43, 7, 65)
+        painter.drawLine(7, 65, 9, 51)
+        painter.drawLine(7, 65, 21, 62)
+        painter.drawLine(36, 43, 65, 65)
+        painter.drawLine(65, 65, 63, 51)
+        painter.drawLine(65, 65, 51, 62)
+        for x, angle in ((22, -32), (50, 32)):
+            painter.save()
+            painter.translate(x, 51)
+            painter.rotate(angle)
+            painter.drawEllipse(QRectF(-5, -11, 10, 22))
+            painter.restore()
     elif device == DeviceType.BOLOMETER:
         painter.drawRoundedRect(14, 14, 44, 44, 7, 7)
         painter.drawEllipse(25, 25, 22, 22)
