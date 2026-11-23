@@ -190,6 +190,37 @@ QPushButton[illustratedChoice="true"]:checked:hover {
 """
 
 
+def _tp80_icon(selected: bool = False) -> QIcon:
+    """Draw the probe and left-hand cabinet from the TP80 reference."""
+    pixmap = QPixmap(96, 96)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    color = QColor("#FFFFFF" if selected else "#1676B8")
+    painter.setPen(QPen(color, 2, Qt.PenStyle.SolidLine,
+                        Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.MiterJoin))
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    painter.drawRect(7, 39, 82, 48)
+    painter.drawLine(7, 60, 89, 60)
+    painter.drawRect(14, 28, 18, 10)
+    painter.drawRect(64, 28, 18, 10)
+    painter.drawLine(23, 25, 23, 28)
+    painter.drawLine(73, 25, 73, 28)
+    painter.drawRect(15, 70, 18, 6)
+    painter.drawRect(15, 80, 18, 6)
+    painter.drawLine(32, 34, 42, 34)
+    painter.drawLine(54, 34, 64, 34)
+    painter.drawLine(42, 32, 47, 39)
+    painter.drawLine(54, 32, 49, 39)
+    painter.drawLine(43, 8, 43, 22)
+    painter.drawLine(43, 8, 53, 8)
+    painter.drawLine(53, 8, 53, 22)
+    painter.drawArc(43, 17, 10, 10, 180 * 16, 180 * 16)
+    painter.drawRect(36, 40, 24, 6)
+    painter.end()
+    return QIcon(pixmap)
+
+
 def _device_icon(device: DeviceType, selected: bool = False) -> QIcon:
     """Draw compact, resolution-independent pictograms for the device cards."""
     pixmap = QPixmap(72, 72)
@@ -456,6 +487,12 @@ class GuidedSetupWindow(QMainWindow):
             button = QPushButton(label)
             button.setCheckable(True)
             button.setProperty("setupChoice", "true")
+            if prober_type == ProberType.MPI_TP80:
+                button.setIcon(_tp80_icon())
+                button.setIconSize(QSize(96, 96))
+                button.toggled.connect(
+                    lambda checked, btn=button: btn.setIcon(_tp80_icon(checked))
+                )
             button.setMinimumHeight(56)
             button.setSizePolicy(
                 QSizePolicy.Policy.Expanding,
