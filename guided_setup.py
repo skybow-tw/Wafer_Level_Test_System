@@ -226,6 +226,24 @@ def _tp80_icon(selected: bool = False) -> QIcon:
     return _prober_icon(pixmap)
 
 
+def _simulation_icon(selected: bool = False) -> QIcon:
+    """Draw a monitor displaying a simulated signal."""
+    pixmap = QPixmap(96, 96)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(QPen(QColor("#FFFFFF" if selected else "#1676B8"), 3))
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    painter.drawRoundedRect(12, 19, 72, 48, 5, 5)
+    painter.drawLine(48, 67, 48, 77)
+    painter.drawLine(34, 77, 62, 77)
+    points = ((23, 44), (34, 44), (42, 33), (53, 54), (61, 44), (73, 44))
+    for (x1, y1), (x2, y2) in zip(points, points[1:]):
+        painter.drawLine(x1, y1, x2, y2)
+    painter.end()
+    return _prober_icon(pixmap)
+
+
 def _ts2000_icon(selected: bool = False) -> QIcon:
     """Draw the TS2000 probe column, monitor, and cabinet."""
     pixmap = QPixmap(96, 96)
@@ -565,6 +583,7 @@ class GuidedSetupWindow(QMainWindow):
                 ProberType.MPI_TP80: _tp80_icon,
                 ProberType.SUSS: _suss_icon,
                 ProberType.MPI_TS2000: _ts2000_icon,
+                ProberType.SIMULATION: _simulation_icon,
             }.get(prober_type)
             if icon_factory is not None:
                 button.setProperty("illustratedChoice", "true")
