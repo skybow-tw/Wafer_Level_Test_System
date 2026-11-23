@@ -203,7 +203,7 @@ def _device_icon(device: DeviceType, selected: bool = False) -> QIcon:
                         Qt.PenJoinStyle.RoundJoin))
     painter.setBrush(Qt.BrushStyle.NoBrush)
     if device == DeviceType.IMU:
-        painter.setPen(QPen(QColor("#FFFFFF" if selected else "#417B90"), 3,
+        painter.setPen(QPen(QColor("#FFFFFF" if selected else "#1676B8"), 3,
                             Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
                             Qt.PenJoinStyle.RoundJoin))
         # Three motion axes with rotation rings, matching the IMU reference.
