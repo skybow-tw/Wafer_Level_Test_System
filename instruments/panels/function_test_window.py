@@ -30,6 +30,8 @@ from instruments.panels.base import InstrumentPanelBase
 _CLOCK_REPLY = re.compile(
     rb"(PCLK_Check|V_SYNC_Check|H_SYNC_Check),\s*(PASS|FAIL),\s*([0-9]+(?:\.[0-9]+)?)\s*Hz"
 )
+_EXT_CLOCK_COMMAND = "PI5, GenCLK_EXT,1MHz\n"
+_EXT_CLOCK_REPLY = b"GenCLK_EXT,OK,1MHz"
 
 
 class FunctionTestWindow(InstrumentPanelBase):
@@ -44,6 +46,7 @@ class FunctionTestWindow(InstrumentPanelBase):
         super().__init__("Bolometer ROIC Function Tester (RPI5)", parent=parent, work_dir=work_dir)
         self._tcp_client = tcp_client
         self._clock_buffer = b""
+        self._ext_clock_ready = False
         self._clock_rows: dict[str, tuple[QLineEdit, QLabel, QLabel]] = {}
         self._command_buttons: list[QPushButton] = []
         self._clock_finished.connect(self._apply_clock_result)
@@ -55,15 +58,13 @@ class FunctionTestWindow(InstrumentPanelBase):
 
         button_row = QHBoxLayout()
         button_row.setSpacing(6)
+        self.ext_clock_button = self._make_command_button("CLK_EXT(1MHz)", _EXT_CLOCK_COMMAND)
+        button_row.addWidget(self.ext_clock_button)
         self.start_button = QPushButton("Full Test")
         self.start_button.setEnabled(False)
         self.start_button.setToolTip("Full test workflow is not connected yet")
         button_row.addWidget(self.start_button)
-        for label, command in (
-            ("CLK_EXT(1MHz)", "PI5, GenGPCLK,1MHz\n"),
-            ("Check Analog", "PI5, Read_Analog\n"),
-        ):
-            button_row.addWidget(self._make_command_button(label, command))
+        button_row.addStretch()
         layout.addLayout(button_row)
 
         clock = QGroupBox("Digital_Clock")
@@ -134,7 +135,10 @@ class FunctionTestWindow(InstrumentPanelBase):
         analog.setFixedWidth(700)
         analog_layout = QGridLayout(analog)
         analog_layout.setColumnStretch(3, 1)
-        for row, name in enumerate(("BGR current", "DAC_V1", "DAC_V2", "DAC_V3")):
+        analog_layout.addWidget(
+            self._make_command_button("Read_Analog", "PI5, Read_Analog\n"), 0, 0
+        )
+        for row, name in enumerate(("BGR current", "DAC_V1", "DAC_V2", "DAC_V3"), 1):
             analog_layout.addWidget(QLabel(f"{name}:"), row, 0)
             display = QLCDNumber(analog)
             display.setDigitCount(6)
@@ -158,10 +162,15 @@ class FunctionTestWindow(InstrumentPanelBase):
             QMessageBox.warning(self, "TCP connection", "Server is not connected.")
             return
         check = command.partition(",")[2].strip()
-        if check in self._clock_rows:
+        if command == _EXT_CLOCK_COMMAND or check in self._clock_rows:
             for button in self._command_buttons:
                 button.setEnabled(False)
-            self._clock_rows[check][2].setText("Testing...")
+            self.start_button.setEnabled(False)
+            if command == _EXT_CLOCK_COMMAND:
+                self._ext_clock_ready = False
+                self.ext_clock_button.setToolTip("Waiting for Server reply...")
+            else:
+                self._clock_rows[check][2].setText("Testing...")
             Thread(
                 target=self._read_clock_result,
                 args=(self._tcp_client, command, check),
@@ -180,6 +189,10 @@ class FunctionTestWindow(InstrumentPanelBase):
             while (remaining := deadline - monotonic()) > 0:
                 while b"\n" in self._clock_buffer:
                     line, _, self._clock_buffer = self._clock_buffer.partition(b"\n")
+                    if command == _EXT_CLOCK_COMMAND and line.startswith(b"GenCLK_EXT,"):
+                        error = "" if line.removesuffix(b"\r") == _EXT_CLOCK_REPLY else "Unexpected reply"
+                        self._clock_finished.emit(check, "", "", error)
+                        return
                     reply = _CLOCK_REPLY.fullmatch(line.strip())
                     if reply is not None and reply[1].decode("ascii") == check:
                         self._clock_finished.emit(
@@ -202,14 +215,19 @@ class FunctionTestWindow(InstrumentPanelBase):
 
     @Slot(str, str, str, str)
     def _apply_clock_result(self, check: str, status: str, frequency: str, error: str) -> None:
-        display, lamp, status_label = self._clock_rows[check]
-        display.setText(frequency or "--")
-        status_label.setText(error or status)
-        color = {"PASS": "#2E7D32", "FAIL": "#C62828"}.get(status, "#444")
-        lamp.setStyleSheet(
-            f"background: {color}; border: 2px solid #666; border-radius: 12px;"
-        )
+        if check in self._clock_rows:
+            display, lamp, status_label = self._clock_rows[check]
+            display.setText(frequency or "--")
+            status_label.setText(error or status)
+            color = {"PASS": "#2E7D32", "FAIL": "#C62828"}.get(status, "#444")
+            lamp.setStyleSheet(
+                f"background: {color}; border: 2px solid #666; border-radius: 12px;"
+            )
+        else:
+            self._ext_clock_ready = not error
+            self.ext_clock_button.setToolTip(error or "Server confirmed 1 MHz")
         connected = self._tcp_client is not None and self._tcp_client.is_connected
+        self.start_button.setEnabled(connected and self._ext_clock_ready)
         for button in self._command_buttons:
             button.setEnabled(connected)
 
