@@ -400,11 +400,10 @@ def _device_icon(device: DeviceType, selected: bool = False) -> QIcon:
 
 def _bolometer_icon(model: BmModelType, selected: bool = False) -> QIcon:
     """Draw a representative grid with the same square size for each model."""
-    if model == BmModelType.BM1602:
-        return _device_icon(DeviceType.BOLOMETER, selected)
     rows, columns = {
         BmModelType.BM28: (2, 8),
-        BmModelType.BM6402: (4, 3),
+        BmModelType.BM1602: (3, 4),
+        BmModelType.BM6402: (6, 8),
         BmModelType.BM12801: (8, 6),
     }[model]
     width = 72 + (max(rows, columns) - 3) * 14
