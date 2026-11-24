@@ -61,18 +61,9 @@ class FunctionTestWindow(InstrumentPanelBase):
         button_row.addWidget(self.start_button)
         for label, command in (
             ("CLK_EXT(1MHz)", "PI5, GenGPCLK,1MHz\n"),
-            ("Check PCLK", "PI5, PCLK_Check\n"),
-            ("Check V_SYNC", "PI5, V_SYNC_Check\n"),
-            ("Check H_SYNC", "PI5, H_SYNC_Check\n"),
             ("Check Analog", "PI5, Read_Analog\n"),
         ):
-            button = QPushButton(label)
-            button.setEnabled(tcp_client is not None and tcp_client.is_connected)
-            button.clicked.connect(
-                lambda _checked=False, payload=command: self._send_command(payload)
-            )
-            button_row.addWidget(button)
-            self._command_buttons.append(button)
+            button_row.addWidget(self._make_command_button(label, command))
         layout.addLayout(button_row)
 
         clock = QGroupBox("Digital_Clock")
@@ -83,18 +74,13 @@ class FunctionTestWindow(InstrumentPanelBase):
         clock_layout.setVerticalSpacing(5)
         clock_layout.setColumnStretch(5, 1)
         for row, (name, check) in enumerate((
-            ("PCLK Check", "PCLK_Check"),
-            ("V_SYNC Check", "V_SYNC_Check"),
-            ("H_SYNC Check", "H_SYNC_Check"),
+            ("Check PCLK", "PCLK_Check"),
+            ("Check V_SYNC", "V_SYNC_Check"),
+            ("Check H_SYNC", "H_SYNC_Check"),
         )):
-            label = QLabel(name)
-            label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            label.setFixedHeight(32)
-            label.setFixedWidth(180)
-            label.setStyleSheet(
-                "background: #DCECF7; border: 1px solid #A4C8E2; font-size: 14px;"
-            )
-            clock_layout.addWidget(label, row, 0)
+            button = self._make_command_button(name, f"PI5, {check}\n")
+            button.setFixedSize(180, 32)
+            clock_layout.addWidget(button, row, 0)
             display = QLineEdit("--")
             display.setReadOnly(True)
             display.setAlignment(Qt.AlignmentFlag.AlignRight)
@@ -159,6 +145,13 @@ class FunctionTestWindow(InstrumentPanelBase):
             analog_layout.addWidget(QLabel("V"), row, 2)
         layout.addWidget(analog)
         self.setCentralWidget(root)
+
+    def _make_command_button(self, label: str, command: str) -> QPushButton:
+        button = QPushButton(label)
+        button.setEnabled(self._tcp_client is not None and self._tcp_client.is_connected)
+        button.clicked.connect(lambda: self._send_command(command))
+        self._command_buttons.append(button)
+        return button
 
     def _send_command(self, command: str) -> None:
         if self._tcp_client is None or not self._tcp_client.is_connected:
