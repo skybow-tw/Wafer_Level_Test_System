@@ -399,15 +399,16 @@ def _device_icon(device: DeviceType, selected: bool = False) -> QIcon:
 
 
 def _bolometer_icon(model: BmModelType, selected: bool = False) -> QIcon:
-    """Draw a representative grid with the same square size for each model."""
+    """Draw the framed sensor grid for the selected model."""
     rows, columns = {
         BmModelType.BM28: (2, 8),
-        BmModelType.BM1602: (3, 4),
+        BmModelType.BM1602: (12, 16),
         BmModelType.BM6402: (6, 8),
         BmModelType.BM12801: (12, 16),
     }[model]
-    width = 72 + (max(rows, columns) - 3) * 14
-    height = 72 + (rows - 3) * 14
+    square, pitch = (5, 7) if model == BmModelType.BM1602 else (10, 14)
+    width = 30 + max(rows, columns) * pitch
+    height = 30 + rows * pitch
     pixmap = QPixmap(width, height)
     pixmap.fill(Qt.GlobalColor.transparent)
     painter = QPainter(pixmap)
@@ -415,13 +416,13 @@ def _bolometer_icon(model: BmModelType, selected: bool = False) -> QIcon:
     color = QColor("#FFFFFF" if selected else "#1676B8")
     painter.setPen(QPen(color, 3))
     painter.drawRect(8, 8, width - 16, height - 16)
-    left = (width - ((columns - 1) * 14 + 10)) // 2
-    top = (height - ((rows - 1) * 14 + 10)) // 2
+    left = (width - ((columns - 1) * pitch + square)) // 2
+    top = (height - ((rows - 1) * pitch + square)) // 2
     painter.setPen(Qt.PenStyle.NoPen)
     painter.setBrush(color)
     for row in range(rows):
         for column in range(columns):
-            painter.drawRect(left + column * 14, top + row * 14, 10, 10)
+            painter.drawRect(left + column * pitch, top + row * pitch, square, square)
     painter.end()
     return QIcon(pixmap)
 
