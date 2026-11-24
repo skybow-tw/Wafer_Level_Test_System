@@ -402,11 +402,11 @@ def _bolometer_icon(model: BmModelType, selected: bool = False) -> QIcon:
     """Draw the framed sensor grid for the selected model."""
     rows, columns = {
         BmModelType.BM28: (2, 8),
-        BmModelType.BM1602: (12, 16),
-        BmModelType.BM6402: (6, 64),
-        BmModelType.BM12801: (12, 16),
+        BmModelType.BM1602: (3, 4),
+        BmModelType.BM6402: (12, 16),
+        BmModelType.BM12801: (24, 32),
     }[model]
-    compact_grid = model in (BmModelType.BM1602, BmModelType.BM6402)
+    compact_grid = model != BmModelType.BM28
     square, pitch = (5, 7) if compact_grid else (10, 14)
     width = 30 + max(rows, columns) * pitch
     height = 30 + rows * pitch
@@ -530,7 +530,7 @@ class GuidedSetupWindow(QMainWindow):
         self._update_asic_tcp_panel()
 
     def _resize_for_setup_page(self, index: int) -> None:
-        # BM6402 needs more width and BM12801 needs more height at this scale.
+        # The BM12801 grid needs room for its full icon and label.
         if index == 2:
             self.setFixedSize(960, 600)
         else:
