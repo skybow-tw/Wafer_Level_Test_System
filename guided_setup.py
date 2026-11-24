@@ -1155,6 +1155,12 @@ class GuidedSetupWindow(QMainWindow):
             return
         if self._is_suss_velocity_test_mode():
             self._start_xy_velocity_move(vx, vy, vz)
+        elif isinstance(self._chuck_motor, MpiTp80ChuckMotor):
+            self._run_motor_action(
+                lambda: self._chuck_motor.move_chuck_relative_um(
+                    num_x_index * 1000, num_y_index * 1000
+                )
+            )
         else:
             self._run_motor_action(
                 lambda: self._chuck_motor.move_chuck_index_relative(
@@ -1207,6 +1213,9 @@ class GuidedSetupWindow(QMainWindow):
 
     def _update_tcp_test_buttons(self) -> None:
         tcp_required = self._requires_tcp_prober(self._selected_prober)
+        suffix = " 1mm" if self._selected_prober == ProberType.MPI_TP80 else ""
+        self.btn_test_left.setText(f"X←{suffix}")
+        self.btn_test_right.setText(f"X→{suffix}")
         enabled = (
             tcp_required
             and self._tcp_client.is_connected

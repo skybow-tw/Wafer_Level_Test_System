@@ -243,12 +243,8 @@ class MpiTp80ChuckMotor(ChuckMotorBase):
 
         self._y = y
 
-    def move_chuck_index_relative(self, num_x_index: int, num_y_index: int) -> None:
-
-        x_um = num_x_index * self._chuck_index_x_um
-
-        y_um = num_y_index * self._chuck_index_y_um
-
+    def move_chuck_relative_um(self, x_um: float, y_um: float) -> None:
+        """Send a relative XY move specified in micrometers."""
         if x_um != 0 or y_um != 0:
 
             command = self._relative_move_command(float(x_um), float(y_um))
@@ -260,6 +256,12 @@ class MpiTp80ChuckMotor(ChuckMotorBase):
             self._x += x_um
 
             self._y += y_um
+
+    def move_chuck_index_relative(self, num_x_index: int, num_y_index: int) -> None:
+        self.move_chuck_relative_um(
+            num_x_index * self._chuck_index_x_um,
+            num_y_index * self._chuck_index_y_um,
+        )
 
         self._now_die_index_x += num_x_index
 
