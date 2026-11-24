@@ -226,6 +226,43 @@ def _tp80_icon(selected: bool = False) -> QIcon:
     return _prober_icon(pixmap)
 
 
+def _meter_icon(instrument: InstrumentType, selected: bool = False) -> QIcon:
+    """Draw the E4980A or DSA front panel from the reference photos."""
+    pixmap = QPixmap(96, 64)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(QPen(QColor("#FFFFFF" if selected else "#1676B8"), 2))
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+
+    if instrument == InstrumentType.DSA:
+        painter.drawRoundedRect(4, 8, 88, 48, 3, 3)
+        painter.drawRect(10, 14, 46, 35)
+        trace = ((15, 43), (24, 42), (29, 36), (34, 20),
+                 (39, 36), (44, 42), (51, 43))
+        for (x1, y1), (x2, y2) in zip(trace, trace[1:]):
+            painter.drawLine(x1, y1, x2, y2)
+        painter.drawEllipse(62, 17, 9, 9)
+        for x in (77, 83):
+            for y in (19, 26, 33):
+                painter.drawLine(x, y, x + 3, y)
+        for x in (63, 80):
+            painter.drawEllipse(x, 44, 5, 5)
+    else:
+        painter.drawRoundedRect(4, 17, 88, 30, 5, 5)
+        painter.drawRect(11, 23, 28, 18)
+        painter.drawLine(16, 29, 32, 29)
+        painter.drawLine(16, 35, 28, 35)
+        for x in (45, 51, 57):
+            for y in (25, 31):
+                painter.drawLine(x, y, x + 2, y)
+        for x in (64, 71, 78, 85):
+            painter.drawEllipse(x, 35, 4, 4)
+
+    painter.end()
+    return _prober_icon(pixmap)
+
+
 def _simulation_icon(selected: bool = False) -> QIcon:
     """Draw a monitor displaying a simulated signal."""
     pixmap = QPixmap(96, 96)
@@ -840,6 +877,19 @@ class GuidedSetupWindow(QMainWindow):
             button = QPushButton(label)
             button.setCheckable(True)
             button.setProperty("setupChoice", "true")
+            if instrument_type in (
+                InstrumentType.LCR_METER,
+                InstrumentType.LCR_METER_BOLOMETER,
+                InstrumentType.DSA,
+            ):
+                button.setProperty("illustratedChoice", "true")
+                button.setIconSize(QSize(84, 56))
+                button.setIcon(_meter_icon(instrument_type))
+                button.toggled.connect(
+                    lambda checked, btn=button, kind=instrument_type: btn.setIcon(
+                        _meter_icon(kind, checked)
+                    )
+                )
             button.setMinimumHeight(56)
             button.setSizePolicy(
                 QSizePolicy.Policy.Expanding,
