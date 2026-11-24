@@ -797,7 +797,7 @@ class GuidedSetupWindow(QMainWindow):
         choice_grid.setRowStretch(0, 1)
         choice_grid.setRowStretch(1, 1)
 
-        self.btn_function_test = QPushButton("Function Test\n(SPI、DAC)")
+        self.btn_function_test = QPushButton("RPI5 Tester")
         self.btn_function_test.setCheckable(True)
         self.btn_function_test.setProperty("setupChoice", "true")
         self.btn_function_test.setProperty("illustratedChoice", "true")
@@ -820,6 +820,15 @@ class GuidedSetupWindow(QMainWindow):
         )
         self.btn_function_test.clicked.connect(self._on_asic_instrument_selected)
         choice_grid.addWidget(self.btn_function_test, 0, 0)
+        arm_tester = QPushButton("ARM Tester")
+        arm_tester.setMinimumHeight(56)
+        arm_tester.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+        self._apply_choice_button_font(arm_tester, checked=False)
+        arm_tester.setEnabled(False)
+        arm_tester.setToolTip("ARM Tester is not available yet.")
+        choice_grid.addWidget(arm_tester, 0, 1)
         layout.addLayout(choice_grid, stretch=1)
 
         tcp_row = QHBoxLayout()
@@ -937,7 +946,7 @@ class GuidedSetupWindow(QMainWindow):
             else None
         )
         self._stack.widget(_BOLOMETER_ASIC_PAGE_INDEX).setTitle(
-            self._instrument_title()
+            "ROIC_Tester_Selection"
         )
         self._stack.setCurrentIndex(_BOLOMETER_ASIC_PAGE_INDEX)
         self.btn_next.setText("完成")
