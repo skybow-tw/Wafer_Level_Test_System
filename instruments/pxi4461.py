@@ -86,6 +86,23 @@ def _load_nidaqmx():
     return nidaqmx
 
 
+def read_roic_voltages() -> list[float]:
+    """Read ai0 through ai3 on the local NI device with all four inputs."""
+    nidaqmx = _load_nidaqmx()
+    devices = []
+    for device in nidaqmx.system.System.local().devices:
+        channels = set(device.ai_physical_chans.channel_names)
+        if all(f"{device.name}/ai{index}" in channels for index in range(4)):
+            devices.append(device.name)
+    if not devices:
+        raise RuntimeError("No NI DAQ device has analog inputs ai0 through ai3.")
+    if len(devices) > 1:
+        raise RuntimeError(f"Multiple NI DAQ devices have ai0 through ai3: {', '.join(devices)}")
+    with nidaqmx.Task() as task:
+        task.ai_channels.add_ai_voltage_chan(f"{devices[0]}/ai0:3")
+        return [float(value) for value in task.read(timeout=5.0)]
+
+
 def list_pxi4461_devices() -> list[Pxi4461DeviceInfo]:
     """Return connected NI devices whose product type or name includes 4461."""
     nidaqmx = _load_nidaqmx()

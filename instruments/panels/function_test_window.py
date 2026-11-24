@@ -29,11 +29,13 @@ from PySide6.QtWidgets import (
 
 from instruments.bmt_tcp import BmtTcpClient
 from instruments.panels.base import InstrumentPanelBase
+from instruments.pxi4461 import read_roic_voltages
 
 _CLOCK_REPLY = re.compile(
     rb"(PCLK_Check|V_SYNC_Check|H_SYNC_Check),\s*(PASS|FAIL),\s*([0-9]+(?:\.[0-9]+)?)\s*Hz"
 )
 _EXT_CLOCK_PREFIX = "GenCLK_EXT,"
+_ENABLE_OUTPUT_COMMAND = "En_V_Out"
 _REGISTER_READS = {
     "Read_Digital": ("Reg_Dig",),
     "Read_Analog": ("Reg_Dig", "Reg_Ana"),
@@ -43,6 +45,7 @@ _REGISTER_READS = {
 class FunctionTestWindow(InstrumentPanelBase):
     _read_finished = Signal(str, str, str, str)
     _register_received = Signal(str, str, str, bool)
+    _voltages_finished = Signal(object, str)
 
     def __init__(
         self,
@@ -59,6 +62,7 @@ class FunctionTestWindow(InstrumentPanelBase):
         self._clock_check_buttons: list[QPushButton] = []
         self._read_finished.connect(self._apply_read_result)
         self._register_received.connect(self._append_register)
+        self._voltages_finished.connect(self._apply_voltages)
         self.setFixedSize(850, 560)
         root = QWidget(self)
         layout = QVBoxLayout(root)
@@ -157,13 +161,26 @@ class FunctionTestWindow(InstrumentPanelBase):
         register_layout.addWidget(self.register_table)
         layout.addWidget(register_map)
 
-        analog = QGroupBox("Analog Test")
+        analog = QGroupBox("Analog_Output Test")
         analog.setFixedWidth(700)
         analog_layout = QGridLayout(analog)
         analog_layout.setColumnStretch(3, 1)
-        analog_layout.addWidget(
-            self._make_command_button("Read_Analog", "PI5, Read_Analog\n"), 0, 0
+        output_row = QHBoxLayout()
+        self.enable_output_button = self._make_command_button(
+            "Enable Output", _ENABLE_OUTPUT_COMMAND
         )
+        output_row.addWidget(self.enable_output_button)
+        self.output_lamp = QLabel("On")
+        self.output_lamp.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.output_lamp.setFixedSize(32, 24)
+        self._set_output_lamp(False)
+        output_row.addWidget(self.output_lamp)
+        self.check_voltage_button = QPushButton("Check Voltage")
+        self.check_voltage_button.clicked.connect(self._check_voltage)
+        output_row.addWidget(self.check_voltage_button)
+        output_row.addStretch()
+        analog_layout.addLayout(output_row, 0, 0, 1, 4)
+        self._voltage_displays: list[QLCDNumber] = []
         dac_row = QHBoxLayout()
         for name in ("BGR current", "DAC_V1", "DAC_V2", "DAC_V3"):
             display = QLCDNumber(analog)
@@ -171,6 +188,7 @@ class FunctionTestWindow(InstrumentPanelBase):
             display.setFixedWidth(100 if name == "BGR current" else 90)
             display.setSegmentStyle(QLCDNumber.SegmentStyle.Flat)
             display.display("--")
+            self._voltage_displays.append(display)
             if name == "BGR current":
                 analog_layout.addWidget(QLabel(f"{name}:"), 1, 0)
                 analog_layout.addWidget(display, 1, 1)
@@ -191,6 +209,37 @@ class FunctionTestWindow(InstrumentPanelBase):
     def _generate_ext_clock(self) -> None:
         frequency = self.ext_clock_selection.currentText()
         self._send_command(f"PI5, {_EXT_CLOCK_PREFIX}{frequency}\n")
+
+    def _set_output_lamp(self, enabled: bool) -> None:
+        color = "#2E7D32" if enabled else "#444"
+        self.output_lamp.setStyleSheet(
+            f"background: {color}; color: white; border-radius: 12px;"
+        )
+
+    def _check_voltage(self) -> None:
+        self.check_voltage_button.setEnabled(False)
+        for display in self._voltage_displays:
+            display.display("--")
+        Thread(target=self._read_voltages, daemon=True).start()
+
+    def _read_voltages(self) -> None:
+        try:
+            values = read_roic_voltages()
+            if len(values) != 4:
+                raise RuntimeError("Expected four voltage readings from NI DAQ.")
+        except Exception as exc:
+            self._voltages_finished.emit([], str(exc))
+        else:
+            self._voltages_finished.emit(values, "")
+
+    @Slot(object, str)
+    def _apply_voltages(self, values: list[float], error: str) -> None:
+        self.check_voltage_button.setEnabled(True)
+        if error:
+            QMessageBox.warning(self, "NI DAQ read failed", error)
+            return
+        for display, value in zip(self._voltage_displays, values):
+            display.display(f"{value:.3f}")
 
     def _invalidate_ext_clock(self) -> None:
         self._ext_clock_ready = False
@@ -217,9 +266,9 @@ class FunctionTestWindow(InstrumentPanelBase):
         if self._tcp_client is None or not self._tcp_client.is_connected:
             QMessageBox.warning(self, "TCP connection", "Server is not connected.")
             return
-        check = command.partition(",")[2].strip()
+        check = _ENABLE_OUTPUT_COMMAND if command == _ENABLE_OUTPUT_COMMAND else command.partition(",")[2].strip()
         generates_clock = check.startswith(_EXT_CLOCK_PREFIX)
-        if generates_clock or check in self._clock_rows or check in _REGISTER_READS:
+        if generates_clock or check in self._clock_rows or check in _REGISTER_READS or check == _ENABLE_OUTPUT_COMMAND:
             for button in self._command_buttons:
                 button.setEnabled(False)
             self.start_button.setEnabled(False)
@@ -230,6 +279,9 @@ class FunctionTestWindow(InstrumentPanelBase):
             elif check in _REGISTER_READS:
                 self.register_table.setRowCount(0)
                 self._register_read_buttons[check].setToolTip("Reading register map...")
+            elif check == _ENABLE_OUTPUT_COMMAND:
+                self._set_output_lamp(False)
+                self.enable_output_button.setToolTip("Waiting for Analog_On...")
             else:
                 self._clock_rows[check][2].setText("Testing...")
             Thread(
@@ -252,6 +304,9 @@ class FunctionTestWindow(InstrumentPanelBase):
             while (remaining := deadline - monotonic()) > 0:
                 while b"\n" in self._reply_buffer:
                     line, _, self._reply_buffer = self._reply_buffer.partition(b"\n")
+                    if check == _ENABLE_OUTPUT_COMMAND and line.strip() == b"Analog_On":
+                        self._read_finished.emit(check, "", "", "")
+                        return
                     if register_prefixes is not None:
                         if line.strip() == b"Reg_Tx_OK":
                             self._read_finished.emit(check, "", "", "")
@@ -312,6 +367,9 @@ class FunctionTestWindow(InstrumentPanelBase):
             )
         elif check in _REGISTER_READS:
             self._register_read_buttons[check].setToolTip(error or "Register map complete")
+        elif check == _ENABLE_OUTPUT_COMMAND:
+            self._set_output_lamp(not error)
+            self.enable_output_button.setToolTip(error or "Server confirmed analog output is on")
         else:
             self._ext_clock_ready = not error and frequency == self.ext_clock_selection.currentText()
             self.ext_clock_button.setToolTip(error or f"Server confirmed {frequency}")
