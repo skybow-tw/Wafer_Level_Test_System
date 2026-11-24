@@ -34,6 +34,10 @@ _CLOCK_REPLY = re.compile(
     rb"(PCLK_Check|V_SYNC_Check|H_SYNC_Check),\s*(PASS|FAIL),\s*([0-9]+(?:\.[0-9]+)?)\s*Hz"
 )
 _EXT_CLOCK_PREFIX = "GenCLK_EXT,"
+_REGISTER_READS = {
+    "Read_Digital": ("Reg_Dig",),
+    "Read_Analog": ("Reg_Dig", "Reg_Ana"),
+}
 
 
 class FunctionTestWindow(InstrumentPanelBase):
@@ -80,7 +84,7 @@ class FunctionTestWindow(InstrumentPanelBase):
         button_row.addStretch()
         layout.addLayout(button_row)
 
-        clock = QGroupBox("Digital_Clock")
+        clock = QGroupBox("Digital Output Clock Check")
         clock.setFixedWidth(700)
         clock_layout = QGridLayout(clock)
         clock_layout.setContentsMargins(16, 12, 16, 10)
@@ -118,14 +122,18 @@ class FunctionTestWindow(InstrumentPanelBase):
             self._clock_rows[check] = display, lamp, status_label
         layout.addWidget(clock)
 
-        register_map = QGroupBox("Digital_SPI")
+        register_map = QGroupBox("Digital_SPI Function Test_Register Map Read/Write")
         register_map.setFixedWidth(700)
         register_layout = QVBoxLayout(register_map)
         register_layout.setContentsMargins(10, 10, 10, 10)
-        self.read_digital_button = self._make_command_button(
-            "Read Digital Map", "PI5, Read_Digital\n"
-        )
-        register_layout.addWidget(self.read_digital_button, alignment=Qt.AlignmentFlag.AlignLeft)
+        register_buttons = QHBoxLayout()
+        self._register_read_buttons = {}
+        for label, check in (("Read Digital", "Read_Digital"), ("Read Analog", "Read_Analog")):
+            button = self._make_command_button(label, f"PI5, {check}\n")
+            self._register_read_buttons[check] = button
+            register_buttons.addWidget(button)
+        register_buttons.addStretch()
+        register_layout.addLayout(register_buttons)
         self.register_table = QTableWidget(0, 3, register_map)
         self.register_table.setHorizontalHeaderLabels(("Address", "Default Value", "Read Value"))
         self.register_table.horizontalHeader().setSectionResizeMode(
@@ -211,7 +219,7 @@ class FunctionTestWindow(InstrumentPanelBase):
             return
         check = command.partition(",")[2].strip()
         generates_clock = check.startswith(_EXT_CLOCK_PREFIX)
-        if generates_clock or check in self._clock_rows or check == "Read_Digital":
+        if generates_clock or check in self._clock_rows or check in _REGISTER_READS:
             for button in self._command_buttons:
                 button.setEnabled(False)
             self.start_button.setEnabled(False)
@@ -219,9 +227,9 @@ class FunctionTestWindow(InstrumentPanelBase):
             if generates_clock:
                 self._ext_clock_ready = False
                 self.ext_clock_button.setToolTip("Waiting for Server reply...")
-            elif check == "Read_Digital":
+            elif check in _REGISTER_READS:
                 self.register_table.setRowCount(0)
-                self.read_digital_button.setToolTip("Reading register map...")
+                self._register_read_buttons[check].setToolTip("Reading register map...")
             else:
                 self._clock_rows[check][2].setText("Testing...")
             Thread(
@@ -237,18 +245,19 @@ class FunctionTestWindow(InstrumentPanelBase):
 
     def _read_result(self, client: BmtTcpClient, command: str, check: str) -> None:
         frequency = check.removeprefix(_EXT_CLOCK_PREFIX) if check.startswith(_EXT_CLOCK_PREFIX) else ""
+        register_prefixes = _REGISTER_READS.get(check)
         try:
             client.send(command)
             deadline = monotonic() + 5
             while (remaining := deadline - monotonic()) > 0:
                 while b"\n" in self._reply_buffer:
                     line, _, self._reply_buffer = self._reply_buffer.partition(b"\n")
-                    if check == "Read_Digital":
+                    if register_prefixes is not None:
                         if line.strip() == b"Reg_Tx_OK":
                             self._read_finished.emit(check, "", "", "")
                             return
                         fields = [field.strip() for field in line.decode("ascii", errors="replace").split(",")]
-                        if len(fields) == 5 and fields[0] == "Reg_Dig":
+                        if len(fields) == 5 and fields[0] in register_prefixes:
                             _, address, default, actual, status = fields
                             if status.casefold() in ("ok", "fail"):
                                 self._register_received.emit(address, default, actual, status.casefold() == "fail")
@@ -301,8 +310,8 @@ class FunctionTestWindow(InstrumentPanelBase):
             lamp.setStyleSheet(
                 f"background: {color}; border: 2px solid #666; border-radius: 12px;"
             )
-        elif check == "Read_Digital":
-            self.read_digital_button.setToolTip(error or "Register map complete")
+        elif check in _REGISTER_READS:
+            self._register_read_buttons[check].setToolTip(error or "Register map complete")
         else:
             self._ext_clock_ready = not error and frequency == self.ext_clock_selection.currentText()
             self.ext_clock_button.setToolTip(error or f"Server confirmed {frequency}")
