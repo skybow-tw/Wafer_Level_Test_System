@@ -35,7 +35,7 @@ _CLOCK_REPLY = re.compile(
     rb"(PCLK_Check|V_SYNC_Check|H_SYNC_Check),\s*(PASS|FAIL),\s*([0-9]+(?:\.[0-9]+)?)\s*Hz"
 )
 _EXT_CLOCK_PREFIX = "GenCLK_EXT,"
-_ENABLE_OUTPUT_COMMAND = "En_V_Out"
+_ENABLE_OUTPUT_CHECK = "En_V_Out"
 _REGISTER_READS = {
     "Read_Digital": ("Reg_Dig",),
     "Read_Analog": ("Reg_Dig", "Reg_Ana"),
@@ -167,7 +167,7 @@ class FunctionTestWindow(InstrumentPanelBase):
         analog_layout.setColumnStretch(3, 1)
         output_row = QHBoxLayout()
         self.enable_output_button = self._make_command_button(
-            "Enable Output", _ENABLE_OUTPUT_COMMAND
+            "Enable Output", f"PI5, {_ENABLE_OUTPUT_CHECK}\n"
         )
         output_row.addWidget(self.enable_output_button)
         self.output_lamp = QLabel("On")
@@ -266,9 +266,9 @@ class FunctionTestWindow(InstrumentPanelBase):
         if self._tcp_client is None or not self._tcp_client.is_connected:
             QMessageBox.warning(self, "TCP connection", "Server is not connected.")
             return
-        check = _ENABLE_OUTPUT_COMMAND if command == _ENABLE_OUTPUT_COMMAND else command.partition(",")[2].strip()
+        check = command.partition(",")[2].strip()
         generates_clock = check.startswith(_EXT_CLOCK_PREFIX)
-        if generates_clock or check in self._clock_rows or check in _REGISTER_READS or check == _ENABLE_OUTPUT_COMMAND:
+        if generates_clock or check in self._clock_rows or check in _REGISTER_READS or check == _ENABLE_OUTPUT_CHECK:
             for button in self._command_buttons:
                 button.setEnabled(False)
             self.start_button.setEnabled(False)
@@ -279,7 +279,7 @@ class FunctionTestWindow(InstrumentPanelBase):
             elif check in _REGISTER_READS:
                 self.register_table.setRowCount(0)
                 self._register_read_buttons[check].setToolTip("Reading register map...")
-            elif check == _ENABLE_OUTPUT_COMMAND:
+            elif check == _ENABLE_OUTPUT_CHECK:
                 self._set_output_lamp(False)
                 self.enable_output_button.setToolTip("Waiting for Analog_On...")
             else:
@@ -304,7 +304,7 @@ class FunctionTestWindow(InstrumentPanelBase):
             while (remaining := deadline - monotonic()) > 0:
                 while b"\n" in self._reply_buffer:
                     line, _, self._reply_buffer = self._reply_buffer.partition(b"\n")
-                    if check == _ENABLE_OUTPUT_COMMAND and line.strip() == b"Analog_On":
+                    if check == _ENABLE_OUTPUT_CHECK and line.strip() == b"Analog_On":
                         self._read_finished.emit(check, "", "", "")
                         return
                     if register_prefixes is not None:
@@ -367,7 +367,7 @@ class FunctionTestWindow(InstrumentPanelBase):
             )
         elif check in _REGISTER_READS:
             self._register_read_buttons[check].setToolTip(error or "Register map complete")
-        elif check == _ENABLE_OUTPUT_COMMAND:
+        elif check == _ENABLE_OUTPUT_CHECK:
             self._set_output_lamp(not error)
             self.enable_output_button.setToolTip(error or "Server confirmed analog output is on")
         else:
