@@ -693,6 +693,12 @@ class GuidedSetupWindow(QMainWindow):
         )
         self.btn_test_right.released.connect(self._on_tcp_test_direction_released)
         test_row.addWidget(self.btn_test_right)
+        self.btn_test_z_up = QPushButton("Z↑ 1mm")
+        self.btn_test_z_down = QPushButton("Z↓ 1mm")
+        self.btn_test_z_up.clicked.connect(lambda: self._run_tp80_z_test(1.0))
+        self.btn_test_z_down.clicked.connect(lambda: self._run_tp80_z_test(-1.0))
+        test_row.addWidget(self.btn_test_z_up)
+        test_row.addWidget(self.btn_test_z_down)
         test_row.addStretch()
 
         self._tcp_test_panel = QWidget()
@@ -1168,6 +1174,11 @@ class GuidedSetupWindow(QMainWindow):
                 )
             )
 
+    def _run_tp80_z_test(self, distance_mm: float) -> None:
+        motor = self._chuck_motor
+        if isinstance(motor, MpiTp80ChuckMotor):
+            self._run_motor_action(lambda: motor.move_chuck_z_relative_mm(distance_mm))
+
     def _on_tcp_test_direction_released(self) -> None:
         if self._is_suss_velocity_test_mode():
             self._stop_xy_velocity_move()
@@ -1228,6 +1239,10 @@ class GuidedSetupWindow(QMainWindow):
         self._tcp_test_panel.setEnabled(tcp_required)
         self.btn_test_left.setEnabled(enabled)
         self.btn_test_right.setEnabled(enabled)
+        is_tp80 = self._selected_prober == ProberType.MPI_TP80
+        for button in (self.btn_test_z_up, self.btn_test_z_down):
+            button.setVisible(is_tp80)
+            button.setEnabled(enabled and is_tp80)
 
     def _load_tcp_fields_for_prober(self, prober_type: ProberType) -> None:
         if not self._requires_tcp_prober(prober_type):

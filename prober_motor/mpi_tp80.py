@@ -562,6 +562,10 @@ class MpiTp80ChuckMotor(ChuckMotorBase):
         else:
             return
 
+        self.move_chuck_z_relative_mm(distance_mm)
+
+    def move_chuck_z_relative_mm(self, distance_mm: float) -> None:
+        """Move Z by the specified distance and check the server reply."""
         command = f"move_chuck_z Relative,{distance_mm:.3f}"
         logger.info("[%s] HW command: %s", self.prober_name, command)
         response = self._send_tcp_and_receive(command)
