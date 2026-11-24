@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QSizePolicy,
+    QToolButton,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -168,22 +169,22 @@ QPushButton[setupChoice="true"]:checked:hover {
     color: #FFFFFF;
     border: 1px solid #106EBE;
 }
-QPushButton[illustratedChoice="true"] {
+QAbstractButton[illustratedChoice="true"] {
     background-color: #FFFFFF;
     border: 2px solid #D7E3EE;
     border-radius: 12px;
     padding: 12px;
 }
-QPushButton[illustratedChoice="true"]:hover {
+QAbstractButton[illustratedChoice="true"]:hover {
     background-color: #F0F7FD;
     border-color: #69A8DA;
 }
-QPushButton[illustratedChoice="true"]:checked {
+QAbstractButton[illustratedChoice="true"]:checked {
     background-color: #0078D4;
     color: #FFFFFF;
     border-color: #0078D4;
 }
-QPushButton[illustratedChoice="true"]:checked:hover {
+QAbstractButton[illustratedChoice="true"]:checked:hover {
     background-color: #106EBE;
     border-color: #106EBE;
 }
@@ -398,28 +399,30 @@ def _device_icon(device: DeviceType, selected: bool = False) -> QIcon:
 
 
 def _bolometer_icon(model: BmModelType, selected: bool = False) -> QIcon:
-    """Show the sensor array geometry using one square per element."""
+    """Draw a representative grid with the same square size for each model."""
+    if model == BmModelType.BM1602:
+        return _device_icon(DeviceType.BOLOMETER, selected)
     rows, columns = {
         BmModelType.BM28: (2, 8),
-        BmModelType.BM1602: (12, 16),
-        BmModelType.BM6402: (48, 64),
-        BmModelType.BM12801: (96, 128),
+        BmModelType.BM6402: (4, 3),
+        BmModelType.BM12801: (8, 6),
     }[model]
-    pixmap = QPixmap(512, 512)
+    width = 72 + (max(rows, columns) - 3) * 14
+    height = 72 + (rows - 3) * 14
+    pixmap = QPixmap(width, height)
     pixmap.fill(Qt.GlobalColor.transparent)
     painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     color = QColor("#FFFFFF" if selected else "#1676B8")
-    cell = min(440 / columns, 440 / rows)
-    square = cell * (0.72 if cell >= 4 else 0.78)
-    left = (512 - columns * cell) / 2
-    top = (512 - rows * cell) / 2
+    painter.setPen(QPen(color, 3))
+    painter.drawRect(8, 8, width - 16, height - 16)
+    left = (width - ((columns - 1) * 14 + 10)) // 2
+    top = (height - ((rows - 1) * 14 + 10)) // 2
     painter.setPen(Qt.PenStyle.NoPen)
     painter.setBrush(color)
     for row in range(rows):
         for column in range(columns):
-            painter.drawRect(QRectF(
-                left + column * cell, top + row * cell, square, square
-            ))
+            painter.drawRect(left + column * 14, top + row * 14, 10, 10)
     painter.end()
     return QIcon(pixmap)
 
@@ -722,7 +725,12 @@ class GuidedSetupWindow(QMainWindow):
         button_group.setExclusive(True)
 
         for index, (label, value) in enumerate(options):
-            button = QPushButton(label)
+            if isinstance(value, BmModelType):
+                button = QToolButton()
+                button.setText(label)
+                button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
+            else:
+                button = QPushButton(label)
             button.setCheckable(True)
             button.setProperty("setupChoice", "true")
             if isinstance(value, DeviceType) or value == DutType.ELEMENT:
@@ -738,7 +746,8 @@ class GuidedSetupWindow(QMainWindow):
             elif isinstance(value, BmModelType):
                 button.setProperty("illustratedChoice", "true")
                 button.setIcon(_bolometer_icon(value))
-                button.setIconSize(QSize(88, 88))
+                icon_size = button.icon().availableSizes()[0]
+                button.setIconSize(icon_size * (64 / 72))
                 button.toggled.connect(
                     lambda checked, btn=button, model=value: btn.setIcon(
                         _bolometer_icon(model, checked)
@@ -1040,7 +1049,7 @@ class GuidedSetupWindow(QMainWindow):
         self.lbl_asic_tcp_status.setText("請連接 Server")
         self._update_asic_tcp_panel()
 
-    def _apply_choice_button_font(self, button: QPushButton, checked: bool) -> None:
+    def _apply_choice_button_font(self, button: QPushButton | QToolButton, checked: bool) -> None:
         font = QFont(button.font())
         font.setPointSize(self._choice_font_point_size)
         font.setBold(checked)
