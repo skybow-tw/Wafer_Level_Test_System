@@ -244,7 +244,7 @@ class FunctionTestWindow(InstrumentPanelBase):
                 while b"\n" in self._reply_buffer:
                     line, _, self._reply_buffer = self._reply_buffer.partition(b"\n")
                     if check == "Read_Digital":
-                        if line.strip() == b"Reg_TxDone":
+                        if line.strip() == b"Reg_Tx_OK":
                             self._read_finished.emit(check, "", "", "")
                             return
                         fields = [field.strip() for field in line.decode("ascii", errors="replace").split(",")]
