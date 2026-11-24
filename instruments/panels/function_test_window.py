@@ -81,10 +81,24 @@ class FunctionTestWindow(InstrumentPanelBase):
         button_row.addWidget(selection_label)
         button_row.addWidget(self.ext_clock_selection)
         self.ext_clock_button = QPushButton("Generate")
+        self.ext_clock_button.setProperty("btnRole", "primary")
         self.ext_clock_button.clicked.connect(self._generate_ext_clock)
         self._command_buttons.append(self.ext_clock_button)
         button_row.addWidget(self.ext_clock_button)
         self.start_button = QPushButton("Full Test")
+        self.start_button.setProperty("btnRole", "primary")
+        for button in (self.ext_clock_button, self.start_button):
+            button.setStyleSheet(
+                "QPushButton:disabled { background-color: #0078D4; "
+                "color: #DCECF7; border: 1px solid #0078D4; }"
+            )
+        self.start_button.setFixedWidth(round(self.start_button.sizeHint().width() * 1.5))
+        font = self.start_button.font()
+        font.setBold(True)
+        self.start_button.setFont(font)
+        self.start_button.setStyleSheet(
+            self.start_button.styleSheet() + " QPushButton { font-weight: bold; }"
+        )
         self.start_button.setEnabled(False)
         self.start_button.setToolTip("Runs the clock checks, then reads both register maps.")
         self.start_button.clicked.connect(self._start_full_test)
@@ -136,10 +150,19 @@ class FunctionTestWindow(InstrumentPanelBase):
         register_layout.setContentsMargins(10, 10, 10, 10)
         register_buttons = QHBoxLayout()
         self._register_read_buttons = {}
+        self._register_indicators: dict[str, tuple[QLabel, QLabel]] = {}
         for label, check in (("Read Digital", "Read_Digital"), ("Read Analog", "Read_Analog")):
             button = self._make_command_button(label, f"PI5, {check}\n")
             self._register_read_buttons[check] = button
             register_buttons.addWidget(button)
+            lamp = QLabel()
+            lamp.setFixedSize(24, 24)
+            status = QLabel()
+            status.setFixedWidth(status.fontMetrics().horizontalAdvance("PASS") + 8)
+            register_buttons.addWidget(lamp)
+            register_buttons.addWidget(status)
+            self._register_indicators[check] = (lamp, status)
+            self._set_register_pass(check, False)
         register_buttons.addStretch()
         register_layout.addLayout(register_buttons)
         self.register_table = QTableWidget(0, 3, register_map)
@@ -263,6 +286,8 @@ class FunctionTestWindow(InstrumentPanelBase):
         if not self.start_button.isEnabled():
             return
         self._full_test_running = True
+        for check in _REGISTER_READS:
+            self._set_register_pass(check, False)
         self._full_test_pending.extend((*self._clock_rows, *_REGISTER_READS))
         self._run_next_full_test_step()
 
@@ -294,6 +319,7 @@ class FunctionTestWindow(InstrumentPanelBase):
                 self.ext_clock_button.setToolTip("Waiting for Server reply...")
             elif check in _REGISTER_READS:
                 self.register_table.setRowCount(0)
+                self._set_register_pass(check, False)
                 self._register_read_buttons[check].setToolTip("Reading register map...")
             elif check == _ENABLE_OUTPUT_CHECK:
                 self._set_output_lamp(False)
@@ -371,6 +397,14 @@ class FunctionTestWindow(InstrumentPanelBase):
                 item.setBackground(QColor("#F44336"))
             self.register_table.setItem(row, column, item)
 
+    def _set_register_pass(self, check: str, passed: bool) -> None:
+        lamp, status = self._register_indicators[check]
+        color = "#2E7D32" if passed else "#444"
+        lamp.setStyleSheet(
+            f"background: {color}; border: 2px solid #666; border-radius: 12px;"
+        )
+        status.setText("PASS" if passed else "")
+
     @Slot(str, str, str, str)
     def _apply_read_result(self, check: str, status: str, frequency: str, error: str) -> None:
         if check in self._clock_rows:
@@ -382,6 +416,7 @@ class FunctionTestWindow(InstrumentPanelBase):
                 f"background: {color}; border: 2px solid #666; border-radius: 12px;"
             )
         elif check in _REGISTER_READS:
+            self._set_register_pass(check, not error)
             self._register_read_buttons[check].setToolTip(error or "Register map complete")
         elif check == _ENABLE_OUTPUT_CHECK:
             self._set_output_lamp(not error)
