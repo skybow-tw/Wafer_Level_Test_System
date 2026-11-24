@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import deque
 from pathlib import Path
 import re
 from threading import Thread
@@ -58,6 +59,8 @@ class FunctionTestWindow(InstrumentPanelBase):
         self._reply_buffer = b""
         self._ext_clock_ready = False
         self._clock_rows: dict[str, tuple[QLineEdit, QLabel, QLabel]] = {}
+        self._full_test_pending: deque[str] = deque()
+        self._full_test_running = False
         self._command_buttons: list[QPushButton] = []
         self._clock_check_buttons: list[QPushButton] = []
         self._read_finished.connect(self._apply_read_result)
@@ -83,7 +86,8 @@ class FunctionTestWindow(InstrumentPanelBase):
         button_row.addWidget(self.ext_clock_button)
         self.start_button = QPushButton("Full Test")
         self.start_button.setEnabled(False)
-        self.start_button.setToolTip("Full test workflow is not connected yet")
+        self.start_button.setToolTip("Runs the clock checks, then reads both register maps.")
+        self.start_button.clicked.connect(self._start_full_test)
         button_row.addWidget(self.start_button)
         button_row.addStretch()
         layout.addLayout(button_row)
@@ -249,11 +253,23 @@ class FunctionTestWindow(InstrumentPanelBase):
     def _update_command_buttons(self) -> None:
         connected = self._tcp_client is not None and self._tcp_client.is_connected
         clock_enabled = connected and self._ext_clock_ready
-        self.start_button.setEnabled(clock_enabled)
+        self.start_button.setEnabled(clock_enabled and not self._full_test_running)
         for button in self._command_buttons:
             button.setEnabled(
                 clock_enabled if button in self._clock_check_buttons else connected
             )
+
+    def _start_full_test(self) -> None:
+        if not self.start_button.isEnabled():
+            return
+        self._full_test_running = True
+        self._full_test_pending.extend((*self._clock_rows, *_REGISTER_READS))
+        self._run_next_full_test_step()
+
+    def _run_next_full_test_step(self) -> None:
+        check = self._full_test_pending.popleft()
+        self.start_button.setToolTip(f"Full Test in progress: {check}")
+        self._send_command(f"PI5, {check}\n")
 
     def _make_command_button(self, label: str, command: str) -> QPushButton:
         button = QPushButton(label)
@@ -373,6 +389,19 @@ class FunctionTestWindow(InstrumentPanelBase):
         else:
             self._ext_clock_ready = not error and frequency == self.ext_clock_selection.currentText()
             self.ext_clock_button.setToolTip(error or f"Server confirmed {frequency}")
+        if self._full_test_running:
+            connected = self._tcp_client is not None and self._tcp_client.is_connected
+            if not error and connected and self._full_test_pending:
+                self._run_next_full_test_step()
+                return
+            self._full_test_running = False
+            self._full_test_pending.clear()
+            if error or not connected:
+                self.start_button.setToolTip(
+                    f"Full Test stopped at {check}: {error or 'Server disconnected'}"
+                )
+            else:
+                self.start_button.setToolTip("Full Test sequence complete.")
         self.ext_clock_selection.setEnabled(True)
         self._update_command_buttons()
 
