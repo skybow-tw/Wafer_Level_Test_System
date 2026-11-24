@@ -403,10 +403,11 @@ def _bolometer_icon(model: BmModelType, selected: bool = False) -> QIcon:
     rows, columns = {
         BmModelType.BM28: (2, 8),
         BmModelType.BM1602: (12, 16),
-        BmModelType.BM6402: (6, 8),
+        BmModelType.BM6402: (6, 64),
         BmModelType.BM12801: (12, 16),
     }[model]
-    square, pitch = (5, 7) if model == BmModelType.BM1602 else (10, 14)
+    compact_grid = model in (BmModelType.BM1602, BmModelType.BM6402)
+    square, pitch = (5, 7) if compact_grid else (10, 14)
     width = 30 + max(rows, columns) * pitch
     height = 30 + rows * pitch
     pixmap = QPixmap(width, height)
@@ -529,8 +530,11 @@ class GuidedSetupWindow(QMainWindow):
         self._update_asic_tcp_panel()
 
     def _resize_for_setup_page(self, index: int) -> None:
-        # The BM12801 grid needs extra vertical space for its full-size cells.
-        self.setFixedHeight(600 if index == 2 else 520)
+        # BM6402 needs more width and BM12801 needs more height at this scale.
+        if index == 2:
+            self.setFixedSize(960, 600)
+        else:
+            self.setFixedSize(640, 520)
 
     def _build_ui(self) -> None:
         central = QWidget()
