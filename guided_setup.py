@@ -406,8 +406,7 @@ def _bolometer_icon(model: BmModelType, selected: bool = False) -> QIcon:
         BmModelType.BM6402: (12, 16),
         BmModelType.BM12801: (24, 32),
     }[model]
-    compact_grid = model != BmModelType.BM28
-    square, pitch = (5, 7) if compact_grid else (10, 14)
+    square, pitch = 5, 7
     width = 30 + max(rows, columns) * pitch
     height = 30 + rows * pitch
     pixmap = QPixmap(width, height)
