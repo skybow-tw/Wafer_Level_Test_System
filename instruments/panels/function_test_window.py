@@ -138,15 +138,25 @@ class FunctionTestWindow(InstrumentPanelBase):
         analog_layout.addWidget(
             self._make_command_button("Read_Analog", "PI5, Read_Analog\n"), 0, 0
         )
-        for row, name in enumerate(("BGR current", "DAC_V1", "DAC_V2", "DAC_V3"), 1):
-            analog_layout.addWidget(QLabel(f"{name}:"), row, 0)
+        dac_row = QHBoxLayout()
+        for name in ("BGR current", "DAC_V1", "DAC_V2", "DAC_V3"):
             display = QLCDNumber(analog)
             display.setDigitCount(6)
-            display.setFixedWidth(100)
+            display.setFixedWidth(100 if name == "BGR current" else 90)
             display.setSegmentStyle(QLCDNumber.SegmentStyle.Flat)
             display.display("--")
-            analog_layout.addWidget(display, row, 1)
-            analog_layout.addWidget(QLabel("V"), row, 2)
+            if name == "BGR current":
+                analog_layout.addWidget(QLabel(f"{name}:"), 1, 0)
+                analog_layout.addWidget(display, 1, 1)
+                analog_layout.addWidget(QLabel("V"), 1, 2)
+            else:
+                if dac_row.count():
+                    dac_row.addSpacing(24)
+                dac_row.addWidget(QLabel(f"{name}:"))
+                dac_row.addWidget(display)
+                dac_row.addWidget(QLabel("V"))
+        dac_row.addStretch()
+        analog_layout.addLayout(dac_row, 2, 0, 1, 4)
         layout.addWidget(analog)
         self.setCentralWidget(root)
 
