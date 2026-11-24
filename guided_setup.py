@@ -725,12 +725,13 @@ class GuidedSetupWindow(QMainWindow):
             button = QPushButton(label)
             button.setCheckable(True)
             button.setProperty("setupChoice", "true")
-            if isinstance(value, DeviceType):
+            if isinstance(value, DeviceType) or value == DutType.ELEMENT:
+                device = value if isinstance(value, DeviceType) else DeviceType.BOLOMETER
                 button.setProperty("illustratedChoice", "true")
-                button.setIcon(_device_icon(value))
+                button.setIcon(_device_icon(device))
                 button.setIconSize(QSize(64, 64))
                 button.toggled.connect(
-                    lambda checked, btn=button, device=value: btn.setIcon(
+                    lambda checked, btn=button, device=device: btn.setIcon(
                         _device_icon(device, checked)
                     )
                 )
@@ -746,7 +747,7 @@ class GuidedSetupWindow(QMainWindow):
             elif isinstance(value, (DutType, ImuSubType)):
                 dut = (
                     DutType.ELEMENT
-                    if value in (DutType.ELEMENT, ImuSubType.COMPONENT)
+                    if value == ImuSubType.COMPONENT
                     else DutType.ASIC
                 )
                 button.setProperty("illustratedChoice", "true")
