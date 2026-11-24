@@ -1280,6 +1280,7 @@ def run_instrument_app(
 
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
+    app.setStyleSheet(generate_theme_qss(THEMES["light"]))
 
     base_dir = work_dir or Path.cwd()
     window = create_modular_instrument_window(
