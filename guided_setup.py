@@ -532,7 +532,7 @@ class GuidedSetupWindow(QMainWindow):
     def _resize_for_setup_page(self, index: int) -> None:
         # The BM12801 grid needs room for its full icon and label.
         if index == 2:
-            self.setFixedSize(960, 600)
+            self.setFixedSize(640, 600)
         else:
             self.setFixedSize(640, 520)
 
