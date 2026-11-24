@@ -66,7 +66,7 @@ class FunctionTestWindow(InstrumentPanelBase):
         self._read_finished.connect(self._apply_read_result)
         self._register_received.connect(self._append_register)
         self._voltages_finished.connect(self._apply_voltages)
-        self.setFixedSize(850, 560)
+        self.setFixedSize(850, 580)
         root = QWidget(self)
         layout = QVBoxLayout(root)
         layout.setContentsMargins(16, 16, 16, 16)
@@ -87,18 +87,15 @@ class FunctionTestWindow(InstrumentPanelBase):
         button_row.addWidget(self.ext_clock_button)
         self.start_button = QPushButton("Full Test")
         self.start_button.setProperty("btnRole", "primary")
-        for button in (self.ext_clock_button, self.start_button):
-            button.setStyleSheet(
-                "QPushButton:disabled { background-color: #0078D4; "
-                "color: #DCECF7; border: 1px solid #0078D4; }"
-            )
+        self.ext_clock_button.setStyleSheet(
+            "QPushButton:disabled { background-color: #0078D4; "
+            "color: #DCECF7; border: 1px solid #0078D4; }"
+        )
         self.start_button.setFixedWidth(round(self.start_button.sizeHint().width() * 1.5))
         font = self.start_button.font()
         font.setBold(True)
         self.start_button.setFont(font)
-        self.start_button.setStyleSheet(
-            self.start_button.styleSheet() + " QPushButton { font-weight: bold; }"
-        )
+        self.start_button.setStyleSheet("QPushButton { font-weight: bold; }")
         self.start_button.setEnabled(False)
         self.start_button.setToolTip("Runs the clock checks, then reads both register maps.")
         self.start_button.clicked.connect(self._start_full_test)
@@ -229,9 +226,26 @@ class FunctionTestWindow(InstrumentPanelBase):
         dac_row.addStretch()
         analog_layout.addLayout(dac_row, 2, 0, 1, 4)
         layout.addWidget(analog)
+        self.exit_button = QPushButton("Exit")
+        self.exit_button.clicked.connect(self._exit_tester)
+        layout.addWidget(self.exit_button, alignment=Qt.AlignmentFlag.AlignLeft)
         self.setCentralWidget(root)
         self.ext_clock_selection.currentTextChanged.connect(self._invalidate_ext_clock)
         self._update_command_buttons()
+
+    def _exit_tester(self) -> None:
+        client = self._tcp_client
+        error = ""
+        if client is not None and client.is_connected:
+            try:
+                client.send("PI5, StopCLK_EXT\n")
+            except (OSError, RuntimeError) as exc:
+                error = str(exc)
+            finally:
+                client.disconnect()
+        if error:
+            QMessageBox.warning(self, "Stop external clock failed", error)
+        self.close()
 
     def _generate_ext_clock(self) -> None:
         frequency = self.ext_clock_selection.currentText()
@@ -313,6 +327,7 @@ class FunctionTestWindow(InstrumentPanelBase):
             for button in self._command_buttons:
                 button.setEnabled(False)
             self.start_button.setEnabled(False)
+            self.exit_button.setEnabled(False)
             self.ext_clock_selection.setEnabled(False)
             if generates_clock:
                 self._ext_clock_ready = False
@@ -438,6 +453,7 @@ class FunctionTestWindow(InstrumentPanelBase):
             else:
                 self.start_button.setToolTip("Full Test sequence complete.")
         self.ext_clock_selection.setEnabled(True)
+        self.exit_button.setEnabled(True)
         self._update_command_buttons()
 
     def start_measurement(
