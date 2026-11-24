@@ -10,6 +10,7 @@ from time import monotonic
 from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QComboBox,
     QGridLayout,
     QGroupBox,
     QHeaderView,
@@ -30,8 +31,7 @@ from instruments.panels.base import InstrumentPanelBase
 _CLOCK_REPLY = re.compile(
     rb"(PCLK_Check|V_SYNC_Check|H_SYNC_Check),\s*(PASS|FAIL),\s*([0-9]+(?:\.[0-9]+)?)\s*Hz"
 )
-_EXT_CLOCK_COMMAND = "PI5, GenCLK_EXT,1MHz\n"
-_EXT_CLOCK_REPLY = b"GenCLK_EXT,OK,1MHz"
+_EXT_CLOCK_PREFIX = "GenCLK_EXT,"
 
 
 class FunctionTestWindow(InstrumentPanelBase):
@@ -49,6 +49,7 @@ class FunctionTestWindow(InstrumentPanelBase):
         self._ext_clock_ready = False
         self._clock_rows: dict[str, tuple[QLineEdit, QLabel, QLabel]] = {}
         self._command_buttons: list[QPushButton] = []
+        self._clock_check_buttons: list[QPushButton] = []
         self._clock_finished.connect(self._apply_clock_result)
         self.setFixedSize(850, 560)
         root = QWidget(self)
@@ -58,7 +59,15 @@ class FunctionTestWindow(InstrumentPanelBase):
 
         button_row = QHBoxLayout()
         button_row.setSpacing(6)
-        self.ext_clock_button = self._make_command_button("CLK_EXT(1MHz)", _EXT_CLOCK_COMMAND)
+        self.ext_clock_selection = QComboBox()
+        self.ext_clock_selection.addItems(("1MHz", "5MHz", "10MHz"))
+        selection_label = QLabel("EXT_CLK Selection:")
+        selection_label.setBuddy(self.ext_clock_selection)
+        button_row.addWidget(selection_label)
+        button_row.addWidget(self.ext_clock_selection)
+        self.ext_clock_button = QPushButton("Generate")
+        self.ext_clock_button.clicked.connect(self._generate_ext_clock)
+        self._command_buttons.append(self.ext_clock_button)
         button_row.addWidget(self.ext_clock_button)
         self.start_button = QPushButton("Full Test")
         self.start_button.setEnabled(False)
@@ -80,6 +89,7 @@ class FunctionTestWindow(InstrumentPanelBase):
             ("Check H_SYNC", "H_SYNC_Check"),
         )):
             button = self._make_command_button(name, f"PI5, {check}\n")
+            self._clock_check_buttons.append(button)
             button.setFixedSize(180, 32)
             clock_layout.addWidget(button, row, 0)
             display = QLineEdit("--")
@@ -159,6 +169,26 @@ class FunctionTestWindow(InstrumentPanelBase):
         analog_layout.addLayout(dac_row, 2, 0, 1, 4)
         layout.addWidget(analog)
         self.setCentralWidget(root)
+        self.ext_clock_selection.currentTextChanged.connect(self._invalidate_ext_clock)
+        self._update_command_buttons()
+
+    def _generate_ext_clock(self) -> None:
+        frequency = self.ext_clock_selection.currentText()
+        self._send_command(f"PI5, {_EXT_CLOCK_PREFIX}{frequency}\n")
+
+    def _invalidate_ext_clock(self) -> None:
+        self._ext_clock_ready = False
+        self.ext_clock_button.setToolTip("Generate the selected frequency.")
+        self._update_command_buttons()
+
+    def _update_command_buttons(self) -> None:
+        connected = self._tcp_client is not None and self._tcp_client.is_connected
+        clock_enabled = connected and self._ext_clock_ready
+        self.start_button.setEnabled(clock_enabled)
+        for button in self._command_buttons:
+            button.setEnabled(
+                clock_enabled if button in self._clock_check_buttons else connected
+            )
 
     def _make_command_button(self, label: str, command: str) -> QPushButton:
         button = QPushButton(label)
@@ -172,11 +202,13 @@ class FunctionTestWindow(InstrumentPanelBase):
             QMessageBox.warning(self, "TCP connection", "Server is not connected.")
             return
         check = command.partition(",")[2].strip()
-        if command == _EXT_CLOCK_COMMAND or check in self._clock_rows:
+        generates_clock = check.startswith(_EXT_CLOCK_PREFIX)
+        if generates_clock or check in self._clock_rows:
             for button in self._command_buttons:
                 button.setEnabled(False)
             self.start_button.setEnabled(False)
-            if command == _EXT_CLOCK_COMMAND:
+            self.ext_clock_selection.setEnabled(False)
+            if generates_clock:
                 self._ext_clock_ready = False
                 self.ext_clock_button.setToolTip("Waiting for Server reply...")
             else:
@@ -193,15 +225,17 @@ class FunctionTestWindow(InstrumentPanelBase):
             QMessageBox.warning(self, "TCP command failed", str(exc))
 
     def _read_clock_result(self, client: BmtTcpClient, command: str, check: str) -> None:
+        frequency = check.removeprefix(_EXT_CLOCK_PREFIX) if check.startswith(_EXT_CLOCK_PREFIX) else ""
         try:
             client.send(command)
             deadline = monotonic() + 5
             while (remaining := deadline - monotonic()) > 0:
                 while b"\n" in self._clock_buffer:
                     line, _, self._clock_buffer = self._clock_buffer.partition(b"\n")
-                    if command == _EXT_CLOCK_COMMAND and line.startswith(b"GenCLK_EXT,"):
-                        error = "" if line.removesuffix(b"\r") == _EXT_CLOCK_REPLY else "Unexpected reply"
-                        self._clock_finished.emit(check, "", "", error)
+                    if frequency and line.startswith(_EXT_CLOCK_PREFIX.encode("ascii")):
+                        expected = f"{_EXT_CLOCK_PREFIX}OK,{frequency}".encode("ascii")
+                        error = "" if line.removesuffix(b"\r") == expected else "Unexpected reply"
+                        self._clock_finished.emit(check, "", frequency, error)
                         return
                     reply = _CLOCK_REPLY.fullmatch(line.strip())
                     if reply is not None and reply[1].decode("ascii") == check:
@@ -234,12 +268,10 @@ class FunctionTestWindow(InstrumentPanelBase):
                 f"background: {color}; border: 2px solid #666; border-radius: 12px;"
             )
         else:
-            self._ext_clock_ready = not error
-            self.ext_clock_button.setToolTip(error or "Server confirmed 1 MHz")
-        connected = self._tcp_client is not None and self._tcp_client.is_connected
-        self.start_button.setEnabled(connected and self._ext_clock_ready)
-        for button in self._command_buttons:
-            button.setEnabled(connected)
+            self._ext_clock_ready = not error and frequency == self.ext_clock_selection.currentText()
+            self.ext_clock_button.setToolTip(error or f"Server confirmed {frequency}")
+        self.ext_clock_selection.setEnabled(True)
+        self._update_command_buttons()
 
     def start_measurement(
         self,
