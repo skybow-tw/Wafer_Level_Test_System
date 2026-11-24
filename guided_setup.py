@@ -404,7 +404,7 @@ def _bolometer_icon(model: BmModelType, selected: bool = False) -> QIcon:
         BmModelType.BM28: (2, 8),
         BmModelType.BM1602: (3, 4),
         BmModelType.BM6402: (6, 8),
-        BmModelType.BM12801: (8, 6),
+        BmModelType.BM12801: (12, 16),
     }[model]
     width = 72 + (max(rows, columns) - 3) * 14
     height = 72 + (rows - 3) * 14
@@ -522,9 +522,14 @@ class GuidedSetupWindow(QMainWindow):
         app_font = QApplication.font() if QApplication.instance() else self.font()
         self._choice_font_point_size = max(app_font.pointSize() * 2, 16)
         self._build_ui()
+        self._stack.currentChanged.connect(self._resize_for_setup_page)
         self.setStyleSheet(generate_theme_qss(THEMES["light"]) + _GUIDED_SETUP_QSS)
         self._update_tcp_panel()
         self._update_asic_tcp_panel()
+
+    def _resize_for_setup_page(self, index: int) -> None:
+        # The BM12801 grid needs extra vertical space for its full-size cells.
+        self.setFixedHeight(600 if index == 2 else 520)
 
     def _build_ui(self) -> None:
         central = QWidget()
