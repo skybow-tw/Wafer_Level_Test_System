@@ -225,10 +225,12 @@ class MpiTp80ChuckMotor(ChuckMotorBase):
 
     def _relative_move_command(self, x_um: float, y_um: float) -> str:
 
+        # Final XY field: 1 enables safety move; 0 disables it.
         return f"move_chuck_xy Relative,{x_um / 1000.0},{y_um / 1000.0},1"
 
     def _home_move_command(self, x_um: float, y_um: float) -> str:
 
+        # The same safety move flag applies to Zero-reference moves.
         return f"move_chuck_xy Zero,{x_um / 1000.0},{y_um / 1000.0},1"
 
     def move_chuck_xy(self, x: float, y: float) -> None:
