@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
+from threading import Thread
+from time import monotonic
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QGridLayout,
@@ -24,8 +27,14 @@ from PySide6.QtWidgets import (
 from instruments.bmt_tcp import BmtTcpClient
 from instruments.panels.base import InstrumentPanelBase
 
+_CLOCK_REPLY = re.compile(
+    rb"(PCLK_Check|V_SYNC_Check|H_SYNC_Check),\s*(PASS|FAIL),\s*([0-9]+(?:\.[0-9]+)?)\s*Hz"
+)
+
 
 class FunctionTestWindow(InstrumentPanelBase):
+    _clock_finished = Signal(str, str, str, str)
+
     def __init__(
         self,
         parent: QWidget | None = None,
@@ -34,6 +43,10 @@ class FunctionTestWindow(InstrumentPanelBase):
     ) -> None:
         super().__init__("Bolometer ROIC Function Tester (RPI5)", parent=parent, work_dir=work_dir)
         self._tcp_client = tcp_client
+        self._clock_buffer = b""
+        self._clock_rows: dict[str, tuple[QLineEdit, QLabel, QLabel]] = {}
+        self._command_buttons: list[QPushButton] = []
+        self._clock_finished.connect(self._apply_clock_result)
         self.setFixedSize(850, 560)
         root = QWidget(self)
         layout = QVBoxLayout(root)
@@ -59,6 +72,7 @@ class FunctionTestWindow(InstrumentPanelBase):
                 lambda _checked=False, payload=command: self._send_command(payload)
             )
             button_row.addWidget(button)
+            self._command_buttons.append(button)
         layout.addLayout(button_row)
 
         clock = QGroupBox("Digital_Clock")
@@ -68,10 +82,10 @@ class FunctionTestWindow(InstrumentPanelBase):
         clock_layout.setHorizontalSpacing(10)
         clock_layout.setVerticalSpacing(5)
         clock_layout.setColumnStretch(5, 1)
-        for row, (name, status) in enumerate((
-            ("PCLK Check", "PCLK OK"),
-            ("V_SYNC Check", "30Hz OK"),
-            ("H_SYNC Check", "16.5kHz OK"),
+        for row, (name, check) in enumerate((
+            ("PCLK Check", "PCLK_Check"),
+            ("V_SYNC Check", "V_SYNC_Check"),
+            ("H_SYNC Check", "H_SYNC_Check"),
         )):
             label = QLabel(name)
             label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -97,9 +111,10 @@ class FunctionTestWindow(InstrumentPanelBase):
                 "background: #444; border: 2px solid #666; border-radius: 12px;"
             )
             clock_layout.addWidget(lamp, row, 3)
-            status_label = QLabel(status)
+            status_label = QLabel("--")
             status_label.setStyleSheet("font-size: 18px;")
             clock_layout.addWidget(status_label, row, 4)
+            self._clock_rows[check] = display, lamp, status_label
         layout.addWidget(clock)
 
         register_map = QGroupBox("Digital_SPI")
@@ -149,10 +164,61 @@ class FunctionTestWindow(InstrumentPanelBase):
         if self._tcp_client is None or not self._tcp_client.is_connected:
             QMessageBox.warning(self, "TCP connection", "Server is not connected.")
             return
+        check = command.partition(",")[2].strip()
+        if check in self._clock_rows:
+            for button in self._command_buttons:
+                button.setEnabled(False)
+            self._clock_rows[check][2].setText("Testing...")
+            Thread(
+                target=self._read_clock_result,
+                args=(self._tcp_client, command, check),
+                daemon=True,
+            ).start()
+            return
         try:
             self._tcp_client.send(command)
         except (OSError, RuntimeError) as exc:
             QMessageBox.warning(self, "TCP command failed", str(exc))
+
+    def _read_clock_result(self, client: BmtTcpClient, command: str, check: str) -> None:
+        try:
+            client.send(command)
+            deadline = monotonic() + 5
+            while (remaining := deadline - monotonic()) > 0:
+                while b"\n" in self._clock_buffer:
+                    line, _, self._clock_buffer = self._clock_buffer.partition(b"\n")
+                    reply = _CLOCK_REPLY.fullmatch(line.strip())
+                    if reply is not None and reply[1].decode("ascii") == check:
+                        self._clock_finished.emit(
+                            check, reply[2].decode("ascii"), reply[3].decode("ascii"), ""
+                        )
+                        return
+                chunk = client.recv(timeout=remaining)
+                if not chunk:
+                    client.disconnect()
+                    raise ConnectionError("Server disconnected.")
+                self._clock_buffer += chunk
+                if len(self._clock_buffer) > 65536:
+                    raise ValueError("Server reply is too long.")
+            raise TimeoutError
+        except TimeoutError:
+            self._clock_finished.emit(check, "", "", "Timeout")
+        except (OSError, RuntimeError, ValueError):
+            self._clock_buffer = b""
+            self._clock_finished.emit(check, "", "", "Error")
+
+    @Slot(str, str, str, str)
+    def _apply_clock_result(self, check: str, status: str, frequency: str, error: str) -> None:
+        display, lamp, status_label = self._clock_rows[check]
+        display.setText(frequency or "--")
+        status_label.setText(error or status)
+        color = {"PASS": "#2E7D32", "FAIL": "#C62828"}.get(status, "#444")
+        lamp.setStyleSheet(
+            f"background: {color}; border: 2px solid #666; border-radius: 12px;"
+        )
+        connected = self._tcp_client is not None and self._tcp_client.is_connected
+        for button in self._command_buttons:
+            button.setEnabled(connected)
 
     def start_measurement(
         self,
