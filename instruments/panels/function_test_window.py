@@ -36,6 +36,7 @@ _CLOCK_REPLY = re.compile(
     rb"(PCLK_Check|V_SYNC_Check|H_SYNC_Check),\s*(PASS|FAIL),\s*([0-9]+(?:\.[0-9]+)?)\s*Hz"
 )
 _EXT_CLOCK_PREFIX = "GenCLK_EXT,"
+_TRANSPARENT_LABEL = "background-color: transparent;"
 _ENABLE_OUTPUT_CHECK = "En_V_Out"
 _REGISTER_READS = {
     "Read_Digital": ("Reg_Dig",),
@@ -126,7 +127,7 @@ class FunctionTestWindow(InstrumentPanelBase):
             display.setFixedWidth(190)
             clock_layout.addWidget(display, row, 1)
             unit = QLabel("Hz")
-            unit.setStyleSheet("font-size: 18px;")
+            unit.setStyleSheet(f"{_TRANSPARENT_LABEL} font-size: 18px;")
             clock_layout.addWidget(unit, row, 2)
             lamp = QLabel()
             lamp.setFixedSize(24, 24)
@@ -135,7 +136,7 @@ class FunctionTestWindow(InstrumentPanelBase):
             )
             clock_layout.addWidget(lamp, row, 3)
             status_label = QLabel("--")
-            status_label.setStyleSheet("font-size: 18px;")
+            status_label.setStyleSheet(f"{_TRANSPARENT_LABEL} font-size: 18px;")
             status_label.ensurePolished()
             status_label.setMinimumWidth(
                 max(status_label.fontMetrics().horizontalAdvance(text)
@@ -158,6 +159,7 @@ class FunctionTestWindow(InstrumentPanelBase):
             lamp = QLabel()
             lamp.setFixedSize(24, 24)
             status = QLabel()
+            status.setStyleSheet(_TRANSPARENT_LABEL)
             status.setFixedWidth(status.fontMetrics().horizontalAdvance("PASS") + 8)
             register_buttons.addWidget(lamp)
             register_buttons.addWidget(status)
@@ -224,16 +226,18 @@ class FunctionTestWindow(InstrumentPanelBase):
             display.setSegmentStyle(QLCDNumber.SegmentStyle.Flat)
             display.display("--")
             self._voltage_displays.append(display)
+            unit = QLabel("V")
+            unit.setStyleSheet(_TRANSPARENT_LABEL)
             if name == "BGR current":
                 analog_layout.addWidget(QLabel(f"{name}:"), 1, 0)
                 analog_layout.addWidget(display, 1, 1)
-                analog_layout.addWidget(QLabel("V"), 1, 2)
+                analog_layout.addWidget(unit, 1, 2)
             else:
                 if dac_row.count():
                     dac_row.addSpacing(24)
                 dac_row.addWidget(QLabel(f"{name}:"))
                 dac_row.addWidget(display)
-                dac_row.addWidget(QLabel("V"))
+                dac_row.addWidget(unit)
         dac_row.addStretch()
         analog_layout.addLayout(dac_row, 2, 0, 1, 4)
         layout.addWidget(analog, alignment=Qt.AlignmentFlag.AlignLeft)
