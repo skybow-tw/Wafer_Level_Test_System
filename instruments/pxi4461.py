@@ -86,20 +86,32 @@ def _load_nidaqmx():
     return nidaqmx
 
 
-def read_roic_voltages() -> list[float]:
-    """Read ai0 through ai3 on the local NI device with all four inputs."""
-    nidaqmx = _load_nidaqmx()
+def list_roic_daq_devices() -> list[tuple[str, bool]]:
+    """List NI devices with ai0 through ai3, including simulated devices."""
+    return _roic_daq_devices(_load_nidaqmx())
+
+
+def _roic_daq_devices(nidaqmx) -> list[tuple[str, bool]]:
     devices = []
     for device in nidaqmx.system.System.local().devices:
         channels = set(device.ai_physical_chans.channel_names)
         if all(f"{device.name}/ai{index}" in channels for index in range(4)):
-            devices.append(device.name)
+            devices.append((device.name, device.is_simulated))
+    return devices
+
+
+def read_roic_voltages(device_name: str | None = None) -> list[float]:
+    """Read ai0 through ai3 on the selected or only compatible NI device."""
+    nidaqmx = _load_nidaqmx()
+    devices = [name for name, _ in _roic_daq_devices(nidaqmx)]
+    if device_name is not None and device_name not in devices:
+        raise RuntimeError(f"Selected NI DAQ device {device_name} is unavailable or lacks ai0 through ai3.")
     if not devices:
         raise RuntimeError("No NI DAQ device has analog inputs ai0 through ai3.")
-    if len(devices) > 1:
+    if device_name is None and len(devices) > 1:
         raise RuntimeError(f"Multiple NI DAQ devices have ai0 through ai3: {', '.join(devices)}")
     with nidaqmx.Task() as task:
-        task.ai_channels.add_ai_voltage_chan(f"{devices[0]}/ai0:3")
+        task.ai_channels.add_ai_voltage_chan(f"{device_name or devices[0]}/ai0:3")
         return [float(value) for value in task.read(timeout=5.0)]
 
 

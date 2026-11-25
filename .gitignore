@@ -15,3 +15,4 @@ dist/
 
 # Last successful local Bolometer ASIC server endpoint
 bolometer_asic_tcp_settings.json
+roic_daq_device.txt

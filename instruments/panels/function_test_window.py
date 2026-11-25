@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
 from instruments.bmt_tcp import BmtTcpClient
 from instruments.panels.base import InstrumentPanelBase
 from instruments.pxi4461 import read_roic_voltages
+from roic_daq_settings import RoicDaqSettingsStore
 
 _CLOCK_REPLY = re.compile(
     rb"(PCLK_Check|V_SYNC_Check|H_SYNC_Check),\s*(PASS|FAIL),\s*([0-9]+(?:\.[0-9]+)?)\s*Hz"
@@ -58,6 +59,7 @@ class FunctionTestWindow(InstrumentPanelBase):
     ) -> None:
         super().__init__("Bolometer ROIC Function Tester (RPI5)", parent=parent, work_dir=work_dir)
         self._tcp_client = tcp_client
+        self._daq_settings = RoicDaqSettingsStore(work_dir)
         self._reply_buffer = b""
         self._ext_clock_ready = False
         self._clock_rows: dict[str, tuple[QLineEdit, QLabel, QLabel]] = {}
@@ -294,7 +296,7 @@ class FunctionTestWindow(InstrumentPanelBase):
 
     def _read_voltages(self) -> None:
         try:
-            values = read_roic_voltages()
+            values = read_roic_voltages(self._daq_settings.get_device())
             if len(values) != 4:
                 raise RuntimeError("Expected four voltage readings from NI DAQ.")
         except Exception as exc:

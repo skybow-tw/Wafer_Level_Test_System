@@ -29,12 +29,15 @@ from PySide6.QtWidgets import (
 
 from bolometer_asic_tcp_settings import BolometerAsicTcpSettingsStore
 from instruments.bmt_tcp import BmtTcpClient
+from instruments.panels.widgets.ni_device_combo import NiDeviceComboBox
+from instruments.pxi4461 import list_roic_daq_devices
 from prober_motor import ProberType, create_chuck_motor
 from prober_motor.base import ChuckMotorBase
 from prober_motor.mpi_tp80 import MpiTp80ChuckMotor
 from prober_motor.suss import SussChuckMotor
 from prober_motor.tcp_client import ProberTcpClient
 from prober_tcp_settings import ProberTcpSettingsStore
+from roic_daq_settings import RoicDaqSettingsStore
 from theme_config import THEMES, generate_theme_qss
 
 
@@ -491,6 +494,7 @@ class GuidedSetupWindow(QMainWindow):
         self._work_dir = work_dir or Path.cwd()
         self._tcp_settings = ProberTcpSettingsStore(self._work_dir)
         self._asic_tcp_settings = BolometerAsicTcpSettingsStore(self._work_dir)
+        self._roic_daq_settings = RoicDaqSettingsStore(self._work_dir)
         self._completed = False
         self._selected_prober: ProberType | None = None
         self._selected_device: DeviceType | None = None
@@ -856,12 +860,16 @@ class GuidedSetupWindow(QMainWindow):
         layout.addLayout(choice_grid, stretch=1)
 
         tcp_row = QHBoxLayout()
-        tcp_row.addWidget(QLabel("Server IP:"))
+        server_label = QLabel("Server IP:")
+        server_label.setStyleSheet("background-color: transparent;")
+        tcp_row.addWidget(server_label)
         endpoint = self._asic_tcp_settings.get_endpoint()
         self.edit_asic_server_ip = QLineEdit(endpoint.ip)
         self.edit_asic_server_ip.setFixedWidth(130)
         tcp_row.addWidget(self.edit_asic_server_ip)
-        tcp_row.addWidget(QLabel("Port:"))
+        port_label = QLabel("Port:")
+        port_label.setStyleSheet("background-color: transparent;")
+        tcp_row.addWidget(port_label)
         self.edit_asic_server_port = QLineEdit(str(endpoint.port))
         self.edit_asic_server_port.setFixedWidth(60)
         tcp_row.addWidget(self.edit_asic_server_port)
@@ -869,11 +877,67 @@ class GuidedSetupWindow(QMainWindow):
         self.btn_asic_tcp_connect.clicked.connect(self._on_asic_tcp_connect_clicked)
         tcp_row.addWidget(self.btn_asic_tcp_connect)
         self.lbl_asic_tcp_status = QLabel("請連接 Server")
+        self.lbl_asic_tcp_status.setStyleSheet("background-color: transparent;")
         self.lbl_asic_tcp_status.setFixedWidth(120)
         tcp_row.addWidget(self.lbl_asic_tcp_status)
         tcp_row.addStretch()
         layout.addLayout(tcp_row)
+
+        daq_row = QHBoxLayout()
+        daq_label = QLabel("DAQ Selection:")
+        daq_label.setStyleSheet("background-color: transparent;")
+        self.roic_daq_combo = NiDeviceComboBox()
+        self.roic_daq_combo.setMinimumWidth(180)
+        self.roic_daq_combo.setPlaceholderText("Select NI DAQ")
+        daq_label.setBuddy(self.roic_daq_combo)
+        self.btn_roic_daq_ok = QPushButton("OK")
+        self.btn_roic_daq_ok.setEnabled(False)
+        saved_device = self._roic_daq_settings.get_device()
+        if saved_device:
+            self.roic_daq_combo.addItem(saved_device, saved_device)
+        self.roic_daq_combo.scan_requested.connect(self._scan_roic_daq_devices)
+        self.roic_daq_combo.currentIndexChanged.connect(
+            lambda index: self.btn_roic_daq_ok.setEnabled(index >= 0)
+        )
+        self.btn_roic_daq_ok.clicked.connect(self._save_roic_daq_device)
+        daq_row.addWidget(daq_label)
+        daq_row.addWidget(self.roic_daq_combo)
+        daq_row.addWidget(self.btn_roic_daq_ok)
+        self.roic_daq_status = QLabel()
+        self.roic_daq_status.setStyleSheet("background-color: transparent;")
+        daq_row.addWidget(self.roic_daq_status)
+        daq_row.addStretch()
+        layout.addLayout(daq_row)
         return group
+
+    def _scan_roic_daq_devices(self) -> None:
+        combo = self.roic_daq_combo
+        previous = combo.currentData() or self._roic_daq_settings.get_device()
+        combo.clear()
+        try:
+            devices = list_roic_daq_devices()
+        except Exception as exc:
+            self.roic_daq_status.setText("DAQ scan failed")
+            self.roic_daq_status.setToolTip(str(exc))
+            return
+        for name, simulated in devices:
+            combo.addItem(f"{name} (Simulated)" if simulated else name, name)
+        combo.setCurrentIndex(combo.findData(previous) if previous else -1)
+        self.roic_daq_status.setText("" if devices else "No compatible DAQ")
+        self.roic_daq_status.setToolTip("")
+
+    def _save_roic_daq_device(self) -> None:
+        device = self.roic_daq_combo.currentData()
+        if not device:
+            return
+        try:
+            self._roic_daq_settings.save_device(device)
+        except OSError as exc:
+            self.roic_daq_status.setText("Save failed")
+            self.roic_daq_status.setToolTip(str(exc))
+        else:
+            self.roic_daq_status.setText("Saved")
+            self.roic_daq_status.setToolTip(device)
 
     def _configure_instrument_page(
         self,
