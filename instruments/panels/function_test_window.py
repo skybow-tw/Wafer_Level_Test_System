@@ -81,6 +81,7 @@ class FunctionTestWindow(InstrumentPanelBase):
         button_row.addWidget(selection_label)
         button_row.addWidget(self.ext_clock_selection)
         self.ext_clock_button = QPushButton("Generate")
+        self.ext_clock_button.setFixedSize(160, 25)
         self.ext_clock_button.setProperty("btnRole", "primary")
         self.ext_clock_button.clicked.connect(self._generate_ext_clock)
         self._command_buttons.append(self.ext_clock_button)
@@ -91,7 +92,7 @@ class FunctionTestWindow(InstrumentPanelBase):
             "QPushButton:disabled { background-color: #0078D4; "
             "color: #DCECF7; border: 1px solid #0078D4; }"
         )
-        self.start_button.setFixedWidth(round(self.start_button.sizeHint().width() * 1.5))
+        self.start_button.setFixedSize(160, 25)
         font = self.start_button.font()
         font.setBold(True)
         self.start_button.setFont(font)
@@ -104,7 +105,6 @@ class FunctionTestWindow(InstrumentPanelBase):
         layout.addLayout(button_row)
 
         clock = QGroupBox("Digital Output Clock Check")
-        clock.setFixedWidth(700)
         clock_layout = QGridLayout(clock)
         clock_layout.setContentsMargins(16, 12, 16, 10)
         clock_layout.setHorizontalSpacing(10)
@@ -117,7 +117,6 @@ class FunctionTestWindow(InstrumentPanelBase):
         )):
             button = self._make_command_button(name, f"PI5, {check}\n")
             self._clock_check_buttons.append(button)
-            button.setFixedSize(180, 32)
             clock_layout.addWidget(button, row, 0)
             display = QLineEdit("--")
             display.setReadOnly(True)
@@ -137,12 +136,16 @@ class FunctionTestWindow(InstrumentPanelBase):
             clock_layout.addWidget(lamp, row, 3)
             status_label = QLabel("--")
             status_label.setStyleSheet("font-size: 18px;")
+            status_label.ensurePolished()
+            status_label.setMinimumWidth(
+                max(status_label.fontMetrics().horizontalAdvance(text)
+                    for text in ("Testing...", "Timeout", "PASS", "FAIL", "Error"))
+            )
             clock_layout.addWidget(status_label, row, 4)
             self._clock_rows[check] = display, lamp, status_label
-        layout.addWidget(clock)
+        layout.addWidget(clock, alignment=Qt.AlignmentFlag.AlignLeft)
 
         register_map = QGroupBox("Digital_SPI Function Test_Register Map Read/Write")
-        register_map.setFixedWidth(700)
         register_layout = QVBoxLayout(register_map)
         register_layout.setContentsMargins(10, 10, 10, 10)
         register_buttons = QHBoxLayout()
@@ -165,14 +168,22 @@ class FunctionTestWindow(InstrumentPanelBase):
         self.register_table = QTableWidget(0, 3, register_map)
         self.register_table.setHorizontalHeaderLabels(("Address", "Default Value", "Read Value"))
         self.register_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.Stretch
+            QHeaderView.ResizeMode.Fixed
         )
+        for column in range(3):
+            self.register_table.setColumnWidth(column, 150)
         self.register_table.verticalHeader().setVisible(False)
         self.register_table.setVerticalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAlwaysOn
         )
         self.register_table.setHorizontalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self.register_table.ensurePolished()
+        self.register_table.setFixedWidth(
+            self.register_table.horizontalHeader().length()
+            + self.register_table.verticalScrollBar().sizeHint().width()
+            + 2 * self.register_table.frameWidth()
         )
         self.register_table.setSelectionBehavior(
             QAbstractItemView.SelectionBehavior.SelectRows
@@ -183,10 +194,9 @@ class FunctionTestWindow(InstrumentPanelBase):
             + 2 * self.register_table.frameWidth()
         )
         register_layout.addWidget(self.register_table)
-        layout.addWidget(register_map)
+        layout.addWidget(register_map, alignment=Qt.AlignmentFlag.AlignLeft)
 
         analog = QGroupBox("Analog_Output Test")
-        analog.setFixedWidth(700)
         analog_layout = QGridLayout(analog)
         analog_layout.setColumnStretch(3, 1)
         output_row = QHBoxLayout()
@@ -200,6 +210,7 @@ class FunctionTestWindow(InstrumentPanelBase):
         self._set_output_lamp(False)
         output_row.addWidget(self.output_lamp)
         self.check_voltage_button = QPushButton("Check Voltage")
+        self.check_voltage_button.setFixedSize(160, 25)
         self.check_voltage_button.clicked.connect(self._check_voltage)
         output_row.addWidget(self.check_voltage_button)
         output_row.addStretch()
@@ -225,8 +236,9 @@ class FunctionTestWindow(InstrumentPanelBase):
                 dac_row.addWidget(QLabel("V"))
         dac_row.addStretch()
         analog_layout.addLayout(dac_row, 2, 0, 1, 4)
-        layout.addWidget(analog)
+        layout.addWidget(analog, alignment=Qt.AlignmentFlag.AlignLeft)
         self.exit_button = QPushButton("Exit")
+        self.exit_button.setFixedSize(160, 25)
         self.exit_button.clicked.connect(self._exit_tester)
         layout.addWidget(self.exit_button, alignment=Qt.AlignmentFlag.AlignLeft)
         self.setCentralWidget(root)
@@ -312,6 +324,7 @@ class FunctionTestWindow(InstrumentPanelBase):
 
     def _make_command_button(self, label: str, command: str) -> QPushButton:
         button = QPushButton(label)
+        button.setFixedSize(160, 25)
         button.setEnabled(self._tcp_client is not None and self._tcp_client.is_connected)
         button.clicked.connect(lambda: self._send_command(command))
         self._command_buttons.append(button)
