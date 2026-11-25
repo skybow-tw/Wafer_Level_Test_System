@@ -67,17 +67,19 @@ class FunctionTestWindow(InstrumentPanelBase):
         self._clock_check_buttons: list[QPushButton] = []
         self._read_finished.connect(self._apply_read_result)
         self._register_received.connect(self._append_register)
+        self._register_has_failure = False
         self._voltages_finished.connect(self._apply_voltages)
         root = QWidget(self)
         layout = QHBoxLayout(root)
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(16)
 
-        sidebar = QVBoxLayout()
+        command_group = QGroupBox("Command")
+        sidebar = QVBoxLayout(command_group)
         sidebar.setSpacing(8)
         sections = QVBoxLayout()
         sections.setSpacing(10)
-        layout.addLayout(sidebar)
+        layout.addWidget(command_group, alignment=Qt.AlignmentFlag.AlignTop)
         layout.addLayout(sections, stretch=1)
         self.ext_clock_selection = QComboBox()
         self.ext_clock_selection.addItems(("1MHz", "5MHz", "10MHz"))
@@ -106,7 +108,7 @@ class FunctionTestWindow(InstrumentPanelBase):
         self.start_button.setToolTip("Runs the clock checks, then reads both register maps.")
         self.start_button.clicked.connect(self._start_full_test)
         sidebar.addWidget(self.start_button)
-        sidebar.addStretch()
+        sidebar.addSpacing(3 * self.start_button.height() - sidebar.spacing())
 
         clock = QGroupBox("Digital Output Clock Check")
         clock_layout = QGridLayout(clock)
@@ -134,17 +136,10 @@ class FunctionTestWindow(InstrumentPanelBase):
             clock_layout.addWidget(unit, row, 2)
             lamp = QLabel()
             lamp.setFixedSize(24, 24)
-            lamp.setStyleSheet(
-                "background: #444; border: 2px solid #666; border-radius: 12px;"
-            )
+            self._set_indicator(lamp, None)
             clock_layout.addWidget(lamp, row, 3)
-            status_label = QLabel("--")
+            status_label = QLabel("PASS")
             status_label.setStyleSheet(f"{_TRANSPARENT_LABEL} font-size: 18px;")
-            status_label.ensurePolished()
-            status_label.setMinimumWidth(
-                max(status_label.fontMetrics().horizontalAdvance(text)
-                    for text in ("Testing...", "Timeout", "PASS", "FAIL", "Error"))
-            )
             clock_layout.addWidget(status_label, row, 4)
             self._clock_rows[check] = display, lamp, status_label
         sections.addWidget(clock, alignment=Qt.AlignmentFlag.AlignLeft)
@@ -162,14 +157,14 @@ class FunctionTestWindow(InstrumentPanelBase):
             register_buttons.addWidget(button)
             lamp = QLabel()
             lamp.setFixedSize(24, 24)
-            status = QLabel()
+            status = QLabel("PASS")
             status.setStyleSheet(f"{_TRANSPARENT_LABEL} font-size: 18px;")
             status.ensurePolished()
             status.setFixedWidth(status.fontMetrics().horizontalAdvance("PASS") + 8)
             register_buttons.addWidget(lamp)
             register_buttons.addWidget(status)
             self._register_indicators[check] = (lamp, status)
-            self._set_register_pass(check, False)
+            self._set_indicator(lamp, None)
         register_buttons.addStretch()
         register_layout.addLayout(register_buttons)
         self.register_table = QTableWidget(0, 3, register_map)
@@ -211,11 +206,13 @@ class FunctionTestWindow(InstrumentPanelBase):
             "Enable Output", f"PI5, {_ENABLE_OUTPUT_CHECK}\n"
         )
         output_row.addWidget(self.enable_output_button)
-        self.output_lamp = QLabel("On")
-        self.output_lamp.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.output_lamp.setFixedSize(32, 24)
-        self._set_output_lamp(False)
+        self.output_lamp = QLabel()
+        self.output_lamp.setFixedSize(24, 24)
+        self._set_indicator(self.output_lamp, None)
         output_row.addWidget(self.output_lamp)
+        output_status = QLabel("ON")
+        output_status.setStyleSheet(f"{_TRANSPARENT_LABEL} font-size: 18px;")
+        output_row.addWidget(output_status)
         self.check_voltage_button = QPushButton("Check Voltage")
         self.check_voltage_button.setFixedSize(130, 30)
         self.check_voltage_button.clicked.connect(self._check_voltage)
@@ -282,10 +279,11 @@ class FunctionTestWindow(InstrumentPanelBase):
         frequency = self.ext_clock_selection.currentText()
         self._send_command(f"PI5, {_EXT_CLOCK_PREFIX}{frequency}\n")
 
-    def _set_output_lamp(self, enabled: bool) -> None:
-        color = "#2E7D32" if enabled else "#444"
-        self.output_lamp.setStyleSheet(
-            f"background: {color}; color: white; border-radius: 12px;"
+    @staticmethod
+    def _set_indicator(lamp: QLabel, passed: bool | None) -> None:
+        color = {True: "#2E7D32", False: "#C62828", None: "#000000"}[passed]
+        lamp.setStyleSheet(
+            f"background: {color}; border: 2px solid #666; border-radius: 12px;"
         )
 
     def _check_voltage(self) -> None:
@@ -332,7 +330,7 @@ class FunctionTestWindow(InstrumentPanelBase):
             return
         self._full_test_running = True
         for check in _REGISTER_READS:
-            self._set_register_pass(check, False)
+            self._set_indicator(self._register_indicators[check][0], None)
         self._full_test_pending.extend((*self._clock_rows, *_REGISTER_READS))
         self._run_next_full_test_step()
 
@@ -366,13 +364,16 @@ class FunctionTestWindow(InstrumentPanelBase):
                 self.ext_clock_button.setToolTip("Waiting for Server reply...")
             elif check in _REGISTER_READS:
                 self.register_table.setRowCount(0)
-                self._set_register_pass(check, False)
+                self._register_has_failure = False
+                self._set_indicator(self._register_indicators[check][0], None)
                 self._register_read_buttons[check].setToolTip("Reading register map...")
             elif check == _ENABLE_OUTPUT_CHECK:
-                self._set_output_lamp(False)
+                self._set_indicator(self.output_lamp, None)
                 self.enable_output_button.setToolTip("Waiting for Analog_On...")
             else:
-                self._clock_rows[check][2].setText("Testing...")
+                _, lamp, label = self._clock_rows[check]
+                self._set_indicator(lamp, None)
+                label.setToolTip("Testing...")
             Thread(
                 target=self._read_result,
                 args=(self._tcp_client, command, check),
@@ -435,6 +436,7 @@ class FunctionTestWindow(InstrumentPanelBase):
 
     @Slot(str, str, str, bool)
     def _append_register(self, address: str, default: str, actual: str, failed: bool) -> None:
+        self._register_has_failure |= failed
         row = self.register_table.rowCount()
         self.register_table.insertRow(row)
         for column, value in enumerate((address, default, actual)):
@@ -443,14 +445,6 @@ class FunctionTestWindow(InstrumentPanelBase):
             if failed and column == 2:
                 item.setBackground(QColor("#F44336"))
             self.register_table.setItem(row, column, item)
-
-    def _set_register_pass(self, check: str, passed: bool) -> None:
-        lamp, status = self._register_indicators[check]
-        color = "#2E7D32" if passed else "#444"
-        lamp.setStyleSheet(
-            f"background: {color}; border: 2px solid #666; border-radius: 12px;"
-        )
-        status.setText("PASS" if passed else "")
 
     @Slot(str, str, str, str)
     def _apply_read_result(self, check: str, status: str, frequency: str, error: str) -> None:
@@ -464,16 +458,16 @@ class FunctionTestWindow(InstrumentPanelBase):
                 font.setPixelSize(font.pixelSize() - 1)
             display.setStyleSheet(f"font-size: {font.pixelSize()}px; background: white;")
             display.setText(text)
-            status_label.setText(error or status)
-            color = {"PASS": "#2E7D32", "FAIL": "#C62828"}.get(status, "#444")
-            lamp.setStyleSheet(
-                f"background: {color}; border: 2px solid #666; border-radius: 12px;"
-            )
+            status_label.setToolTip(error or status)
+            self._set_indicator(lamp, not error and status == "PASS")
         elif check in _REGISTER_READS:
-            self._set_register_pass(check, not error)
-            self._register_read_buttons[check].setToolTip(error or "Register map complete")
+            self._set_indicator(
+                self._register_indicators[check][0], not error and not self._register_has_failure
+            )
+            result = "Register check failed" if self._register_has_failure else "Register map complete"
+            self._register_read_buttons[check].setToolTip(error or result)
         elif check == _ENABLE_OUTPUT_CHECK:
-            self._set_output_lamp(not error)
+            self._set_indicator(self.output_lamp, not error)
             self.enable_output_button.setToolTip(error or "Server confirmed analog output is on")
         else:
             self._ext_clock_ready = not error and frequency == self.ext_clock_selection.currentText()
