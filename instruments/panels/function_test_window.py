@@ -84,6 +84,7 @@ class FunctionTestWindow(InstrumentPanelBase):
         self.ext_clock_selection = QComboBox()
         self.ext_clock_selection.addItems(("1MHz", "5MHz", "10MHz"))
         selection_label = QLabel("EXT_CLK Selection:")
+        selection_label.setStyleSheet(_TRANSPARENT_LABEL)
         selection_label.setBuddy(self.ext_clock_selection)
         sidebar.addWidget(selection_label)
         sidebar.addWidget(self.ext_clock_selection)
@@ -230,8 +231,10 @@ class FunctionTestWindow(InstrumentPanelBase):
             self._voltage_displays.append(display)
             unit = QLabel("V")
             unit.setStyleSheet(_TRANSPARENT_LABEL)
+            name_label = QLabel(f"{name}:")
+            name_label.setStyleSheet(_TRANSPARENT_LABEL)
             if name == "BGR current":
-                analog_layout.addWidget(QLabel(f"{name}:"), 1, 0)
+                analog_layout.addWidget(name_label, 1, 0)
                 analog_layout.addWidget(display, 1, 1)
                 analog_layout.addWidget(unit, 1, 2)
                 self.bgr_resistance = QSpinBox()
@@ -244,7 +247,7 @@ class FunctionTestWindow(InstrumentPanelBase):
             else:
                 if dac_row.count():
                     dac_row.addSpacing(24)
-                dac_row.addWidget(QLabel(f"{name}:"))
+                dac_row.addWidget(name_label)
                 dac_row.addWidget(display)
                 dac_row.addWidget(unit)
         dac_row.addStretch()
