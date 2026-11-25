@@ -321,9 +321,12 @@ class FunctionTestWindow(InstrumentPanelBase):
         clock_enabled = connected and self._ext_clock_ready
         self.start_button.setEnabled(clock_enabled and not self._full_test_running)
         for button in self._command_buttons:
-            button.setEnabled(
-                clock_enabled if button in self._clock_check_buttons else connected
-            )
+            if button is self.ext_clock_button:
+                button.setEnabled(True)
+            elif button in self._clock_check_buttons:
+                button.setEnabled(clock_enabled)
+            else:
+                button.setEnabled(connected)
 
     def _start_full_test(self) -> None:
         if not self.start_button.isEnabled():
