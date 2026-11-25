@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPushButton,
+    QSpinBox,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -150,7 +151,8 @@ class FunctionTestWindow(InstrumentPanelBase):
 
         register_map = QGroupBox("Digital_SPI Function Test_Register Map Read/Write")
         register_layout = QVBoxLayout(register_map)
-        register_layout.setContentsMargins(10, 10, 10, 10)
+        register_layout.setContentsMargins(10, 4, 10, 8)
+        register_layout.setSpacing(4)
         register_buttons = QHBoxLayout()
         self._register_read_buttons = {}
         self._register_indicators: dict[str, tuple[QLabel, QLabel]] = {}
@@ -161,7 +163,8 @@ class FunctionTestWindow(InstrumentPanelBase):
             lamp = QLabel()
             lamp.setFixedSize(24, 24)
             status = QLabel()
-            status.setStyleSheet(_TRANSPARENT_LABEL)
+            status.setStyleSheet(f"{_TRANSPARENT_LABEL} font-size: 18px;")
+            status.ensurePolished()
             status.setFixedWidth(status.fontMetrics().horizontalAdvance("PASS") + 8)
             register_buttons.addWidget(lamp)
             register_buttons.addWidget(status)
@@ -193,7 +196,7 @@ class FunctionTestWindow(InstrumentPanelBase):
             QAbstractItemView.SelectionBehavior.SelectRows
         )
         self.register_table.setFixedHeight(
-            self.register_table.horizontalHeader().height()
+            self.register_table.horizontalHeader().sizeHint().height()
             + 3 * self.register_table.verticalHeader().defaultSectionSize()
             + 2 * self.register_table.frameWidth()
         )
@@ -202,7 +205,7 @@ class FunctionTestWindow(InstrumentPanelBase):
 
         analog = QGroupBox("Analog_Output Test")
         analog_layout = QGridLayout(analog)
-        analog_layout.setColumnStretch(3, 1)
+        analog_layout.setColumnStretch(5, 1)
         output_row = QHBoxLayout()
         self.enable_output_button = self._make_command_button(
             "Enable Output", f"PI5, {_ENABLE_OUTPUT_CHECK}\n"
@@ -218,7 +221,7 @@ class FunctionTestWindow(InstrumentPanelBase):
         self.check_voltage_button.clicked.connect(self._check_voltage)
         output_row.addWidget(self.check_voltage_button)
         output_row.addStretch()
-        analog_layout.addLayout(output_row, 0, 0, 1, 4)
+        analog_layout.addLayout(output_row, 0, 0, 1, 6)
         self._voltage_displays: list[QLCDNumber] = []
         dac_row = QHBoxLayout()
         for name in ("BGR current", "DAC_V1", "DAC_V2", "DAC_V3"):
@@ -234,6 +237,13 @@ class FunctionTestWindow(InstrumentPanelBase):
                 analog_layout.addWidget(QLabel(f"{name}:"), 1, 0)
                 analog_layout.addWidget(display, 1, 1)
                 analog_layout.addWidget(unit, 1, 2)
+                self.bgr_resistance = QSpinBox()
+                self.bgr_resistance.setRange(1, 1_000_000)
+                self.bgr_resistance.setAccessibleName("BGR resistance")
+                analog_layout.addWidget(self.bgr_resistance, 1, 3)
+                ohm_unit = QLabel("Ω")
+                ohm_unit.setStyleSheet(_TRANSPARENT_LABEL)
+                analog_layout.addWidget(ohm_unit, 1, 4)
             else:
                 if dac_row.count():
                     dac_row.addSpacing(24)
@@ -241,8 +251,9 @@ class FunctionTestWindow(InstrumentPanelBase):
                 dac_row.addWidget(display)
                 dac_row.addWidget(unit)
         dac_row.addStretch()
-        analog_layout.addLayout(dac_row, 2, 0, 1, 4)
+        analog_layout.addLayout(dac_row, 2, 0, 1, 6)
         sections.addWidget(analog, alignment=Qt.AlignmentFlag.AlignLeft)
+        sections.addStretch()
         self.exit_button = QPushButton("Exit")
         self.exit_button.setFixedSize(130, 30)
         self.exit_button.clicked.connect(self._exit_tester)
