@@ -255,6 +255,7 @@ class FunctionTestWindow(InstrumentPanelBase):
         sections.addWidget(analog, alignment=Qt.AlignmentFlag.AlignLeft)
         sections.addStretch()
         self.exit_button = QPushButton("Exit")
+        self.exit_button.setProperty("btnRole", "close")
         self.exit_button.setFixedSize(130, 30)
         self.exit_button.clicked.connect(self._exit_tester)
         sidebar.addWidget(self.exit_button)
