@@ -85,7 +85,7 @@ class FunctionTestWindow(InstrumentPanelBase):
         sidebar.addWidget(selection_label)
         sidebar.addWidget(self.ext_clock_selection)
         self.ext_clock_button = QPushButton("Generate")
-        self.ext_clock_button.setFixedSize(150, 30)
+        self.ext_clock_button.setFixedSize(130, 30)
         self.ext_clock_button.setProperty("btnRole", "primary")
         self.ext_clock_button.clicked.connect(self._generate_ext_clock)
         self._command_buttons.append(self.ext_clock_button)
@@ -96,7 +96,7 @@ class FunctionTestWindow(InstrumentPanelBase):
             "QPushButton:disabled { background-color: #0078D4; "
             "color: #DCECF7; border: 1px solid #0078D4; }"
         )
-        self.start_button.setFixedSize(150, 30)
+        self.start_button.setFixedSize(130, 30)
         font = self.start_button.font()
         font.setBold(True)
         self.start_button.setFont(font)
@@ -214,7 +214,7 @@ class FunctionTestWindow(InstrumentPanelBase):
         self._set_output_lamp(False)
         output_row.addWidget(self.output_lamp)
         self.check_voltage_button = QPushButton("Check Voltage")
-        self.check_voltage_button.setFixedSize(150, 30)
+        self.check_voltage_button.setFixedSize(130, 30)
         self.check_voltage_button.clicked.connect(self._check_voltage)
         output_row.addWidget(self.check_voltage_button)
         output_row.addStretch()
@@ -244,7 +244,7 @@ class FunctionTestWindow(InstrumentPanelBase):
         analog_layout.addLayout(dac_row, 2, 0, 1, 4)
         sections.addWidget(analog, alignment=Qt.AlignmentFlag.AlignLeft)
         self.exit_button = QPushButton("Exit")
-        self.exit_button.setFixedSize(150, 30)
+        self.exit_button.setFixedSize(130, 30)
         self.exit_button.clicked.connect(self._exit_tester)
         sidebar.addWidget(self.exit_button)
         self.setCentralWidget(root)
@@ -332,7 +332,7 @@ class FunctionTestWindow(InstrumentPanelBase):
 
     def _make_command_button(self, label: str, command: str) -> QPushButton:
         button = QPushButton(label)
-        button.setFixedSize(150, 30)
+        button.setFixedSize(130, 30)
         button.setEnabled(self._tcp_client is not None and self._tcp_client.is_connected)
         button.clicked.connect(lambda: self._send_command(command))
         self._command_buttons.append(button)
