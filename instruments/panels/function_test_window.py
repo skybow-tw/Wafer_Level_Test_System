@@ -9,7 +9,7 @@ from threading import Thread
 from time import monotonic
 
 from PySide6.QtCore import Qt, Signal, Slot
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QFontMetrics
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -67,7 +67,7 @@ class FunctionTestWindow(InstrumentPanelBase):
         self._read_finished.connect(self._apply_read_result)
         self._register_received.connect(self._append_register)
         self._voltages_finished.connect(self._apply_voltages)
-        self.setFixedSize(850, 580)
+        self.setFixedSize(850, 590)
         root = QWidget(self)
         layout = QVBoxLayout(root)
         layout.setContentsMargins(16, 16, 16, 16)
@@ -82,7 +82,7 @@ class FunctionTestWindow(InstrumentPanelBase):
         button_row.addWidget(selection_label)
         button_row.addWidget(self.ext_clock_selection)
         self.ext_clock_button = QPushButton("Generate")
-        self.ext_clock_button.setFixedSize(160, 25)
+        self.ext_clock_button.setFixedSize(150, 30)
         self.ext_clock_button.setProperty("btnRole", "primary")
         self.ext_clock_button.clicked.connect(self._generate_ext_clock)
         self._command_buttons.append(self.ext_clock_button)
@@ -93,7 +93,7 @@ class FunctionTestWindow(InstrumentPanelBase):
             "QPushButton:disabled { background-color: #0078D4; "
             "color: #DCECF7; border: 1px solid #0078D4; }"
         )
-        self.start_button.setFixedSize(160, 25)
+        self.start_button.setFixedSize(150, 30)
         font = self.start_button.font()
         font.setBold(True)
         self.start_button.setFont(font)
@@ -124,7 +124,7 @@ class FunctionTestWindow(InstrumentPanelBase):
             display.setAlignment(Qt.AlignmentFlag.AlignRight)
             display.setFixedHeight(32)
             display.setStyleSheet("font-size: 18px; background: white;")
-            display.setFixedWidth(190)
+            display.setFixedWidth(95)
             clock_layout.addWidget(display, row, 1)
             unit = QLabel("Hz")
             unit.setStyleSheet(f"{_TRANSPARENT_LABEL} font-size: 18px;")
@@ -212,7 +212,7 @@ class FunctionTestWindow(InstrumentPanelBase):
         self._set_output_lamp(False)
         output_row.addWidget(self.output_lamp)
         self.check_voltage_button = QPushButton("Check Voltage")
-        self.check_voltage_button.setFixedSize(160, 25)
+        self.check_voltage_button.setFixedSize(150, 30)
         self.check_voltage_button.clicked.connect(self._check_voltage)
         output_row.addWidget(self.check_voltage_button)
         output_row.addStretch()
@@ -242,7 +242,7 @@ class FunctionTestWindow(InstrumentPanelBase):
         analog_layout.addLayout(dac_row, 2, 0, 1, 4)
         layout.addWidget(analog, alignment=Qt.AlignmentFlag.AlignLeft)
         self.exit_button = QPushButton("Exit")
-        self.exit_button.setFixedSize(160, 25)
+        self.exit_button.setFixedSize(150, 30)
         self.exit_button.clicked.connect(self._exit_tester)
         layout.addWidget(self.exit_button, alignment=Qt.AlignmentFlag.AlignLeft)
         self.setCentralWidget(root)
@@ -328,7 +328,7 @@ class FunctionTestWindow(InstrumentPanelBase):
 
     def _make_command_button(self, label: str, command: str) -> QPushButton:
         button = QPushButton(label)
-        button.setFixedSize(160, 25)
+        button.setFixedSize(150, 30)
         button.setEnabled(self._tcp_client is not None and self._tcp_client.is_connected)
         button.clicked.connect(lambda: self._send_command(command))
         self._command_buttons.append(button)
@@ -441,7 +441,14 @@ class FunctionTestWindow(InstrumentPanelBase):
     def _apply_read_result(self, check: str, status: str, frequency: str, error: str) -> None:
         if check in self._clock_rows:
             display, lamp, status_label = self._clock_rows[check]
-            display.setText(frequency or "--")
+            text = frequency or "--"
+            font = display.font()
+            font.setPixelSize(18)
+            available_width = display.width() - 10
+            while font.pixelSize() > 8 and QFontMetrics(font).horizontalAdvance(text) > available_width:
+                font.setPixelSize(font.pixelSize() - 1)
+            display.setStyleSheet(f"font-size: {font.pixelSize()}px; background: white;")
+            display.setText(text)
             status_label.setText(error or status)
             color = {"PASS": "#2E7D32", "FAIL": "#C62828"}.get(status, "#444")
             lamp.setStyleSheet(
