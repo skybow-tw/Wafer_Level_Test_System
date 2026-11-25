@@ -96,10 +96,6 @@ class FunctionTestWindow(InstrumentPanelBase):
         sidebar.addWidget(self.ext_clock_button)
         self.start_button = QPushButton("Full Test")
         self.start_button.setProperty("btnRole", "primary")
-        self.ext_clock_button.setStyleSheet(
-            "QPushButton:disabled { background-color: #0078D4; "
-            "color: #DCECF7; border: 1px solid #0078D4; }"
-        )
         self.start_button.setFixedSize(130, 30)
         font = self.start_button.font()
         font.setBold(True)
