@@ -19,6 +19,7 @@ class BmtTcpClient:
         self._socket: socket.socket | None = None
         self._is_connected = False
         self._remote: tuple[str, int] | None = None
+        self.roic_clock_frequency: str | None = None
 
     @property
     def is_connected(self) -> bool:
@@ -65,7 +66,17 @@ class BmtTcpClient:
         self._remote = (ip, int(port))
         logger.info("BMT TCP connected to %s:%s", ip, port)
 
+    def disconnect_roic(self) -> None:
+        """Stop the external clock before intentionally ending a ROIC session."""
+        if self.is_connected:
+            try:
+                self.send("PI5, StopCLK_EXT\n")
+            except (OSError, RuntimeError):
+                logger.warning("Unable to stop the ROIC external clock", exc_info=True)
+        self.disconnect()
+
     def disconnect(self) -> None:
+        self.roic_clock_frequency = None
         self._is_connected = False
         sock = self._socket
         self._socket = None

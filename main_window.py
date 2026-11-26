@@ -931,7 +931,7 @@ class MainWindow(QMainWindow):
         self._close_instrument_windows()
         self._disconnect_tcp()
         if self._asic_tcp_client is not None:
-            self._asic_tcp_client.disconnect()
+            self._asic_tcp_client.disconnect_roic()
         self._datalog_watcher.stop()
         super().closeEvent(event)
 

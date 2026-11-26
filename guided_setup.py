@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+from time import monotonic
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -11,6 +12,7 @@ from PySide6.QtCore import QObject, Qt, QTimer, Signal, QSize, QRectF
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
+    QComboBox,
     QButtonGroup,
     QGridLayout,
     QGroupBox,
@@ -484,6 +486,10 @@ class _TcpConnectBridge(QObject):
     finished = Signal(bool, str)
 
 
+class _RoicClockBridge(QObject):
+    finished = Signal(str, str)
+
+
 class GuidedSetupWindow(QMainWindow):
     """Multi-step wizard: prober, device type, then path-specific selection."""
 
@@ -506,6 +512,9 @@ class GuidedSetupWindow(QMainWindow):
         self._instrument_page: QGroupBox | None = None
         self._tcp_client = ProberTcpClient()
         self._asic_tcp_client = BmtTcpClient()
+        self._asic_generating_clock = False
+        self._asic_clock_bridge = _RoicClockBridge(self)
+        self._asic_clock_bridge.finished.connect(self._on_asic_clock_finished)
         self._asic_connecting = False
         self._asic_connect_bridge = _TcpConnectBridge()
         self._asic_connect_bridge.finished.connect(self._on_asic_tcp_connect_finished)
@@ -883,6 +892,23 @@ class GuidedSetupWindow(QMainWindow):
         tcp_row.addStretch()
         layout.addLayout(tcp_row)
 
+        clock_row = QHBoxLayout()
+        clock_label = QLabel("EXT_CLK Selection:")
+        clock_label.setStyleSheet("background-color: transparent;")
+        self.roic_clock_combo = QComboBox()
+        self.roic_clock_combo.addItems(("1MHz", "5MHz", "10MHz"))
+        clock_label.setBuddy(self.roic_clock_combo)
+        self.btn_roic_generate = QPushButton("Generate")
+        self.btn_roic_generate.setProperty("btnRole", "primary")
+        self.btn_roic_generate.clicked.connect(self._generate_roic_clock)
+        self.roic_clock_combo.currentTextChanged.connect(self._update_asic_tcp_panel)
+        self.roic_clock_status = QLabel()
+        self.roic_clock_status.setStyleSheet("background-color: transparent;")
+        for widget in (clock_label, self.roic_clock_combo, self.btn_roic_generate, self.roic_clock_status):
+            clock_row.addWidget(widget)
+        clock_row.addStretch()
+        layout.addLayout(clock_row)
+
         daq_row = QHBoxLayout()
         daq_label = QLabel("DAQ Selection:")
         daq_label.setStyleSheet("background-color: transparent;")
@@ -896,9 +922,7 @@ class GuidedSetupWindow(QMainWindow):
         if saved_device:
             self.roic_daq_combo.addItem(saved_device, saved_device)
         self.roic_daq_combo.scan_requested.connect(self._scan_roic_daq_devices)
-        self.roic_daq_combo.currentIndexChanged.connect(
-            lambda index: self.btn_roic_daq_ok.setEnabled(index >= 0)
-        )
+        self.roic_daq_combo.currentIndexChanged.connect(self._update_asic_tcp_panel)
         self.btn_roic_daq_ok.clicked.connect(self._save_roic_daq_device)
         daq_row.addWidget(daq_label)
         daq_row.addWidget(self.roic_daq_combo)
@@ -1038,7 +1062,8 @@ class GuidedSetupWindow(QMainWindow):
         )
         self._stack.setCurrentIndex(_BOLOMETER_ASIC_PAGE_INDEX)
         self.btn_next.setText("完成")
-        self._update_asic_next_button()
+        self._scan_roic_daq_devices()
+        self._update_asic_tcp_panel()
         self._update_prev_button()
 
     def _update_asic_next_button(self) -> None:
@@ -1047,6 +1072,8 @@ class GuidedSetupWindow(QMainWindow):
                 self.btn_function_test.isChecked()
                 and self._asic_tcp_client.is_connected
                 and not self._asic_connecting
+                and not self._asic_generating_clock
+                and self._asic_tcp_client.roic_clock_frequency == self.roic_clock_combo.currentText()
             )
 
     def _update_asic_tcp_panel(self) -> None:
@@ -1058,14 +1085,73 @@ class GuidedSetupWindow(QMainWindow):
         self.edit_asic_server_port.setEnabled(
             selected and not connected and not self._asic_connecting
         )
-        self.btn_asic_tcp_connect.setEnabled(selected and not self._asic_connecting)
+        self.btn_function_test.setEnabled(not self._asic_generating_clock and not self._asic_connecting)
+        self.btn_asic_tcp_connect.setEnabled(
+            selected and not self._asic_connecting and not self._asic_generating_clock
+        )
         self.btn_asic_tcp_connect.setText("Disconnect" if connected else "Connect")
+        self.roic_clock_combo.setEnabled(selected and not self._asic_generating_clock)
+        self.btn_roic_generate.setEnabled(
+            selected and not self._asic_connecting and not self._asic_generating_clock
+        )
+        self.roic_daq_combo.setEnabled(selected)
+        self.btn_roic_daq_ok.setEnabled(selected and self.roic_daq_combo.currentIndex() >= 0)
+        if not connected:
+            self.roic_clock_status.clear()
         self._update_asic_next_button()
+
+    def _generate_roic_clock(self) -> None:
+        client = self._asic_tcp_client
+        if self._asic_generating_clock:
+            return
+        if not client.is_connected:
+            self.roic_clock_status.setText("Connect to Server first")
+            return
+        frequency = self.roic_clock_combo.currentText()
+        client.roic_clock_frequency = None
+        self._asic_generating_clock = True
+        self.roic_clock_status.setText("Waiting...")
+        self._update_asic_tcp_panel()
+
+        def worker() -> None:
+            try:
+                client.send(f"PI5, GenCLK_EXT,{frequency}\n")
+                expected = f"GenCLK_EXT,OK,{frequency}".encode("ascii")
+                deadline = monotonic() + 5
+                pending = b""
+                while (remaining := deadline - monotonic()) > 0:
+                    chunk = client.recv(timeout=remaining)
+                    if not chunk:
+                        client.disconnect()
+                        raise ConnectionError("Server disconnected")
+                    pending += chunk
+                    while b"\n" in pending:
+                        line, _, pending = pending.partition(b"\n")
+                        if line.startswith(b"GenCLK_EXT,"):
+                            error = "" if line.removesuffix(b"\r") == expected else "Unexpected reply"
+                            self._asic_clock_bridge.finished.emit(frequency, error)
+                            return
+                    if len(pending) > 65536:
+                        raise ValueError("Server reply is too long")
+                raise TimeoutError
+            except TimeoutError:
+                self._asic_clock_bridge.finished.emit(frequency, "Timeout")
+            except (OSError, RuntimeError, ValueError) as exc:
+                self._asic_clock_bridge.finished.emit(frequency, str(exc))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_asic_clock_finished(self, frequency: str, error: str) -> None:
+        self._asic_generating_clock = False
+        if not error and self._asic_tcp_client.is_connected:
+            self._asic_tcp_client.roic_clock_frequency = frequency
+        self._update_asic_tcp_panel()
+        self.roic_clock_status.setText(error or f"{frequency} OK")
 
     def _on_asic_instrument_selected(self, checked: bool) -> None:
         if not checked and self._asic_tcp_client.is_connected:
             self._asic_connection_timer.stop()
-            self._asic_tcp_client.disconnect()
+            self._asic_tcp_client.disconnect_roic()
             self.lbl_asic_tcp_status.setText("請連接 Server")
         self._selected_instrument = (
             InstrumentType.FUNCTION_TEST_SPI_DAC if checked else None
@@ -1075,7 +1161,7 @@ class GuidedSetupWindow(QMainWindow):
     def _on_asic_tcp_connect_clicked(self) -> None:
         if self._asic_tcp_client.is_connected:
             self._asic_connection_timer.stop()
-            self._asic_tcp_client.disconnect()
+            self._asic_tcp_client.disconnect_roic()
             self.lbl_asic_tcp_status.setText("請連接 Server")
             self._update_asic_tcp_panel()
             return
@@ -1121,6 +1207,8 @@ class GuidedSetupWindow(QMainWindow):
         self._update_asic_tcp_panel()
 
     def _check_asic_tcp_connection(self) -> None:
+        if self._asic_generating_clock:
+            return
         if self._asic_tcp_client.check_connection():
             return
         self._asic_connection_timer.stop()
@@ -1613,7 +1701,7 @@ class GuidedSetupWindow(QMainWindow):
         self._asic_connection_timer.stop()
         if not self._completed:
             self._disconnect_tcp()
-            self._asic_tcp_client.disconnect()
+            self._asic_tcp_client.disconnect_roic()
             app = QApplication.instance()
             if app is not None:
                 app.quit()
