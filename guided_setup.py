@@ -1097,7 +1097,7 @@ class GuidedSetupWindow(QMainWindow):
         self.btn_asic_tcp_connect.setText("Disconnect" if connected else "Connect")
         self.roic_clock_combo.setEnabled(selected and not self._asic_generating_clock)
         self.btn_roic_generate.setEnabled(
-            selected and not self._asic_connecting and not self._asic_generating_clock
+            selected and connected and not self._asic_connecting and not self._asic_generating_clock
         )
         self.roic_daq_combo.setEnabled(selected)
         self.btn_roic_daq_ok.setEnabled(selected and self.roic_daq_combo.currentIndex() >= 0)
