@@ -28,10 +28,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from bolometer_asic_tcp_settings import BolometerAsicTcpSettingsStore
 from instruments.bmt_tcp import BmtTcpClient
 from instruments.panels.base import InstrumentPanelBase
 from instruments.pxi4461 import read_roic_voltages
-from roic_daq_settings import RoicDaqSettingsStore
 
 _CLOCK_REPLY = re.compile(
     rb"(PCLK_Check|V_SYNC_Check|H_SYNC_Check),\s*(PASS|FAIL),\s*([0-9]+(?:\.[0-9]+)?)\s*Hz"
@@ -48,6 +48,7 @@ class FunctionTestWindow(InstrumentPanelBase):
     _read_finished = Signal(str, str, str, str)
     _register_received = Signal(str, str, str, bool)
     _voltages_finished = Signal(object, str)
+    _standalone_finished = Signal(str, str)
 
     def __init__(
         self,
@@ -57,7 +58,12 @@ class FunctionTestWindow(InstrumentPanelBase):
     ) -> None:
         super().__init__("Bolometer ROIC Function Tester (RPI5)", parent=parent, work_dir=work_dir)
         self._tcp_client = tcp_client
-        self._daq_settings = RoicDaqSettingsStore(work_dir)
+        self._roic_settings = BolometerAsicTcpSettingsStore(work_dir)
+        self._standalone = False
+        self._standalone_starting = False
+        self._standalone_close_requested = False
+        self._standalone_daq_device: str | None = None
+        self._standalone_finished.connect(self._apply_standalone_result)
         self._reply_buffer = b""
         self._clock_rows: dict[str, tuple[QLineEdit, QLabel, QLabel]] = {}
         self._full_test_pending: deque[str] = deque()
@@ -239,6 +245,61 @@ class FunctionTestWindow(InstrumentPanelBase):
         self.setFixedSize(max(850, layout.sizeHint().width()), 590)
         self._update_command_buttons()
 
+    def start_standalone(self) -> None:
+        """Connect and configure the tester using the last local settings."""
+        if self._standalone:
+            return
+        self._standalone = True
+        self._standalone_starting = True
+        client = BmtTcpClient()
+        self._tcp_client = client
+        self.check_voltage_button.setEnabled(False)
+        self.statusBar().showMessage("Connecting to ROIC Server...")
+        self.setFixedHeight(max(self.height(), self.minimumSizeHint().height()))
+        Thread(target=self._configure_standalone, args=(client,), daemon=True).start()
+
+    def _configure_standalone(self, client: BmtTcpClient) -> None:
+        device = ""
+        step = "Server connection"
+        try:
+            endpoint = self._roic_settings.get_endpoint()
+            client.connect(endpoint.ip, endpoint.port)
+            if self._standalone_close_requested:
+                self._standalone_finished.emit("", "")
+                return
+            device = self._roic_settings.get_daq_device() or ""
+            frequency = self._roic_settings.get_clock_frequency()
+            step = f"Generate {frequency}"
+            client.generate_roic_clock(frequency)
+        except (OSError, RuntimeError, ValueError) as exc:
+            self._standalone_finished.emit(device, f"{step} failed: {exc or 'Timeout'}")
+        else:
+            self._standalone_finished.emit(device, "")
+
+    @Slot(str, str)
+    def _apply_standalone_result(self, device: str, error: str) -> None:
+        self._standalone_starting = False
+        if self._standalone_close_requested:
+            self.close()
+            return
+        self._standalone_daq_device = device or None
+        self.check_voltage_button.setEnabled(True)
+        self._update_command_buttons()
+        if error:
+            self.statusBar().showMessage(error)
+        else:
+            frequency = self._tcp_client.roic_clock_frequency
+            self.statusBar().showMessage(f"EXT_CLK: {frequency} | DAQ: {device or 'Auto detect'}")
+
+    def closeEvent(self, event) -> None:
+        if self._standalone_starting:
+            self._standalone_close_requested = True
+            event.ignore()
+            return
+        if self._standalone and self._tcp_client is not None:
+            self._tcp_client.disconnect_roic()
+        super().closeEvent(event)
+
     @staticmethod
     def _set_indicator(lamp: QLabel, passed: bool | None) -> None:
         color = {True: "#2E7D32", False: "#C62828", None: "#000000"}[passed]
@@ -254,7 +315,11 @@ class FunctionTestWindow(InstrumentPanelBase):
 
     def _read_voltages(self) -> None:
         try:
-            values = read_roic_voltages(self._daq_settings.get_device())
+            device = (
+                self._standalone_daq_device if self._standalone
+                else self._roic_settings.get_daq_device()
+            )
+            values = read_roic_voltages(device)
             if len(values) != 4:
                 raise RuntimeError("Expected four voltage readings from NI DAQ.")
         except Exception as exc:

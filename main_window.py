@@ -1276,7 +1276,10 @@ def run_instrument_app(
 
     from PySide6.QtWidgets import QApplication
 
-    from instruments.panels.registry import create_modular_instrument_window
+    from instruments.panels.registry import (
+        FUNCTION_TEST_SPI_DAC_DISPLAY_NAME,
+        create_modular_instrument_window,
+    )
 
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
@@ -1291,6 +1294,8 @@ def run_instrument_app(
         print(f"尚未支援儀器面板：{instrument_name}", file=sys.stderr)
         return 1
     window.show()
+    if instrument_name == FUNCTION_TEST_SPI_DAC_DISPLAY_NAME:
+        window.start_standalone()
     return app.exec()
 
 

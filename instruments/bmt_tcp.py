@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import select
 import socket
+from time import monotonic
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +75,30 @@ class BmtTcpClient:
             except (OSError, RuntimeError):
                 logger.warning("Unable to stop the ROIC external clock", exc_info=True)
         self.disconnect()
+
+    def generate_roic_clock(self, frequency: str) -> None:
+        """Generate the requested clock and wait for its matching acknowledgment."""
+        self.roic_clock_frequency = None
+        self.send(f"PI5, GenCLK_EXT,{frequency}\n")
+        expected = f"GenCLK_EXT,OK,{frequency}".encode("ascii")
+        deadline = monotonic() + 5
+        pending = b""
+        while (remaining := deadline - monotonic()) > 0:
+            chunk = self.recv(timeout=remaining)
+            if not chunk:
+                self.disconnect()
+                raise ConnectionError("Server disconnected")
+            pending += chunk
+            while b"\n" in pending:
+                line, _, pending = pending.partition(b"\n")
+                if line.startswith(b"GenCLK_EXT,"):
+                    if line.removesuffix(b"\r") != expected:
+                        raise ValueError("Unexpected external clock reply")
+                    self.roic_clock_frequency = frequency
+                    return
+            if len(pending) > 65536:
+                raise ValueError("Server reply is too long")
+        raise TimeoutError("External clock reply timed out")
 
     def disconnect(self) -> None:
         self.roic_clock_frequency = None

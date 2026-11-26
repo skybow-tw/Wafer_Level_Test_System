@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import threading
-from time import monotonic
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -29,7 +28,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from bolometer_asic_tcp_settings import BolometerAsicTcpSettingsStore
+from bolometer_asic_tcp_settings import BolometerAsicTcpSettingsStore, ROIC_CLOCK_OPTIONS
 from instruments.bmt_tcp import BmtTcpClient
 from instruments.panels.widgets.ni_device_combo import NiDeviceComboBox
 from instruments.pxi4461 import list_roic_daq_devices
@@ -39,7 +38,6 @@ from prober_motor.mpi_tp80 import MpiTp80ChuckMotor
 from prober_motor.suss import SussChuckMotor
 from prober_motor.tcp_client import ProberTcpClient
 from prober_tcp_settings import ProberTcpSettingsStore
-from roic_daq_settings import RoicDaqSettingsStore
 from theme_config import THEMES, generate_theme_qss
 
 
@@ -500,7 +498,6 @@ class GuidedSetupWindow(QMainWindow):
         self._work_dir = work_dir or Path.cwd()
         self._tcp_settings = ProberTcpSettingsStore(self._work_dir)
         self._asic_tcp_settings = BolometerAsicTcpSettingsStore(self._work_dir)
-        self._roic_daq_settings = RoicDaqSettingsStore(self._work_dir)
         self._completed = False
         self._selected_prober: ProberType | None = None
         self._selected_device: DeviceType | None = None
@@ -896,12 +893,12 @@ class GuidedSetupWindow(QMainWindow):
         clock_label = QLabel("EXT_CLK Selection:")
         clock_label.setStyleSheet("background-color: transparent;")
         self.roic_clock_combo = QComboBox()
-        self.roic_clock_combo.addItems(("1MHz", "5MHz", "10MHz"))
+        self.roic_clock_combo.addItems(ROIC_CLOCK_OPTIONS)
         clock_label.setBuddy(self.roic_clock_combo)
         self.btn_roic_generate = QPushButton("Generate")
         self.btn_roic_generate.setProperty("btnRole", "primary")
         self.btn_roic_generate.clicked.connect(self._generate_roic_clock)
-        self.roic_clock_combo.currentTextChanged.connect(self._update_asic_tcp_panel)
+        self.roic_clock_combo.currentTextChanged.connect(self._on_roic_clock_selection_changed)
         self.roic_clock_status = QLabel()
         self.roic_clock_status.setStyleSheet("background-color: transparent;")
         for widget in (clock_label, self.roic_clock_combo, self.btn_roic_generate, self.roic_clock_status):
@@ -918,7 +915,7 @@ class GuidedSetupWindow(QMainWindow):
         daq_label.setBuddy(self.roic_daq_combo)
         self.btn_roic_daq_ok = QPushButton("OK")
         self.btn_roic_daq_ok.setEnabled(False)
-        saved_device = self._roic_daq_settings.get_device()
+        saved_device = self._asic_tcp_settings.get_daq_device()
         if saved_device:
             self.roic_daq_combo.addItem(saved_device, saved_device)
         self.roic_daq_combo.scan_requested.connect(self._scan_roic_daq_devices)
@@ -936,7 +933,7 @@ class GuidedSetupWindow(QMainWindow):
 
     def _scan_roic_daq_devices(self) -> None:
         combo = self.roic_daq_combo
-        previous = combo.currentData() or self._roic_daq_settings.get_device()
+        previous = combo.currentData() or self._asic_tcp_settings.get_daq_device()
         combo.clear()
         try:
             devices = list_roic_daq_devices()
@@ -955,7 +952,7 @@ class GuidedSetupWindow(QMainWindow):
         if not device:
             return
         try:
-            self._roic_daq_settings.save_device(device)
+            self._asic_tcp_settings.save_daq_device(device)
         except OSError as exc:
             self.roic_daq_status.setText("Save failed")
             self.roic_daq_status.setToolTip(str(exc))
@@ -1062,6 +1059,14 @@ class GuidedSetupWindow(QMainWindow):
         )
         self._stack.setCurrentIndex(_BOLOMETER_ASIC_PAGE_INDEX)
         self.btn_next.setText("完成")
+        if not self._asic_tcp_client.is_connected and not self._asic_connecting:
+            endpoint = self._asic_tcp_settings.get_endpoint()
+            self.edit_asic_server_ip.setText(endpoint.ip)
+            self.edit_asic_server_port.setText(str(endpoint.port))
+        was_blocked = self.roic_clock_combo.blockSignals(True)
+        self.roic_clock_combo.setCurrentText(self._asic_tcp_settings.get_clock_frequency())
+        self.roic_clock_combo.blockSignals(was_blocked)
+        self.roic_daq_combo.setCurrentIndex(-1)
         self._scan_roic_daq_devices()
         self._update_asic_tcp_panel()
         self._update_prev_button()
@@ -1100,6 +1105,14 @@ class GuidedSetupWindow(QMainWindow):
             self.roic_clock_status.clear()
         self._update_asic_next_button()
 
+    def _on_roic_clock_selection_changed(self, frequency: str) -> None:
+        try:
+            self._asic_tcp_settings.save_clock_frequency(frequency)
+        except OSError as exc:
+            self.roic_clock_status.setText("Save failed")
+            self.roic_clock_status.setToolTip(str(exc))
+        self._update_asic_tcp_panel()
+
     def _generate_roic_clock(self) -> None:
         client = self._asic_tcp_client
         if self._asic_generating_clock:
@@ -1115,36 +1128,16 @@ class GuidedSetupWindow(QMainWindow):
 
         def worker() -> None:
             try:
-                client.send(f"PI5, GenCLK_EXT,{frequency}\n")
-                expected = f"GenCLK_EXT,OK,{frequency}".encode("ascii")
-                deadline = monotonic() + 5
-                pending = b""
-                while (remaining := deadline - monotonic()) > 0:
-                    chunk = client.recv(timeout=remaining)
-                    if not chunk:
-                        client.disconnect()
-                        raise ConnectionError("Server disconnected")
-                    pending += chunk
-                    while b"\n" in pending:
-                        line, _, pending = pending.partition(b"\n")
-                        if line.startswith(b"GenCLK_EXT,"):
-                            error = "" if line.removesuffix(b"\r") == expected else "Unexpected reply"
-                            self._asic_clock_bridge.finished.emit(frequency, error)
-                            return
-                    if len(pending) > 65536:
-                        raise ValueError("Server reply is too long")
-                raise TimeoutError
-            except TimeoutError:
-                self._asic_clock_bridge.finished.emit(frequency, "Timeout")
+                client.generate_roic_clock(frequency)
             except (OSError, RuntimeError, ValueError) as exc:
-                self._asic_clock_bridge.finished.emit(frequency, str(exc))
+                self._asic_clock_bridge.finished.emit(frequency, str(exc) or "Timeout")
+            else:
+                self._asic_clock_bridge.finished.emit(frequency, "")
 
         threading.Thread(target=worker, daemon=True).start()
 
     def _on_asic_clock_finished(self, frequency: str, error: str) -> None:
         self._asic_generating_clock = False
-        if not error and self._asic_tcp_client.is_connected:
-            self._asic_tcp_client.roic_clock_frequency = frequency
         self._update_asic_tcp_panel()
         self.roic_clock_status.setText(error or f"{frequency} OK")
 
