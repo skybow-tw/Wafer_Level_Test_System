@@ -210,9 +210,11 @@ class FunctionTestWindow(InstrumentPanelBase):
         self.check_voltage_button = QPushButton("Check Voltage")
         self.check_voltage_button.setFixedSize(130, 30)
         self.check_voltage_button.clicked.connect(self._check_voltage)
-        output_row.addWidget(self.check_voltage_button)
         output_row.addStretch()
         analog_layout.addLayout(output_row, 0, 0, 1, 6)
+        analog_layout.addWidget(
+            self.check_voltage_button, 1, 0, 1, 6, Qt.AlignmentFlag.AlignLeft
+        )
         self._voltage_displays: list[QLCDNumber] = []
         dac_row = QHBoxLayout()
         for name in ("BGR current", "DAC_V1", "DAC_V2", "DAC_V3"):
@@ -227,16 +229,16 @@ class FunctionTestWindow(InstrumentPanelBase):
             name_label = QLabel(f"{name}:")
             name_label.setStyleSheet(_TRANSPARENT_LABEL)
             if name == "BGR current":
-                analog_layout.addWidget(name_label, 1, 0)
-                analog_layout.addWidget(display, 1, 1)
-                analog_layout.addWidget(unit, 1, 2)
+                analog_layout.addWidget(name_label, 2, 0)
+                analog_layout.addWidget(display, 2, 1)
+                analog_layout.addWidget(unit, 2, 2)
                 self.bgr_resistance = QSpinBox()
                 self.bgr_resistance.setRange(1, 1_000_000)
                 self.bgr_resistance.setAccessibleName("BGR resistance")
-                analog_layout.addWidget(self.bgr_resistance, 1, 3)
+                analog_layout.addWidget(self.bgr_resistance, 2, 3)
                 ohm_unit = QLabel("Ω")
                 ohm_unit.setStyleSheet(_TRANSPARENT_LABEL)
-                analog_layout.addWidget(ohm_unit, 1, 4)
+                analog_layout.addWidget(ohm_unit, 2, 4)
             else:
                 if dac_row.count():
                     dac_row.addSpacing(24)
@@ -244,7 +246,7 @@ class FunctionTestWindow(InstrumentPanelBase):
                 dac_row.addWidget(display)
                 dac_row.addWidget(unit)
         dac_row.addStretch()
-        analog_layout.addLayout(dac_row, 2, 0, 1, 6)
+        analog_layout.addLayout(dac_row, 3, 0, 1, 6)
         sections.addWidget(analog, alignment=Qt.AlignmentFlag.AlignLeft)
         sections.addStretch()
         self.setCentralWidget(root)
