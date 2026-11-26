@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import deque
+from datetime import datetime
 from pathlib import Path
 import re
 from threading import Thread
@@ -48,7 +49,7 @@ class FunctionTestWindow(InstrumentPanelBase):
     _read_finished = Signal(str, str, str, str)
     _register_received = Signal(str, str, str, bool)
     _voltages_finished = Signal(object, str)
-    _standalone_finished = Signal(str, str)
+    _standalone_finished = Signal(str, str, str, str)
 
     def __init__(
         self,
@@ -260,30 +261,40 @@ class FunctionTestWindow(InstrumentPanelBase):
         client = BmtTcpClient()
         self._tcp_client = client
         self.check_voltage_button.setEnabled(False)
-        self.statusBar().showMessage("Connecting to ROIC Server...")
+        self._standalone_status = QLabel("連線中…")
+        self._standalone_status.setStyleSheet(_TRANSPARENT_LABEL)
+        self._standalone_status.setMinimumHeight(3 * self._standalone_status.fontMetrics().lineSpacing())
+        self._standalone_status.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self.statusBar().addWidget(self._standalone_status, 1)
         self.setFixedHeight(max(self.height(), self.minimumSizeHint().height()))
         Thread(target=self._configure_standalone, args=(client,), daemon=True).start()
 
     def _configure_standalone(self, client: BmtTcpClient) -> None:
-        device = ""
-        step = "Server connection"
+        endpoint = self._roic_settings.get_endpoint()
         try:
-            endpoint = self._roic_settings.get_endpoint()
             client.connect(endpoint.ip, endpoint.port)
-            if self._standalone_close_requested:
-                self._standalone_finished.emit("", "")
-                return
-            device = self._roic_settings.get_daq_device() or ""
-            frequency = self._roic_settings.get_clock_frequency()
-            step = f"Generate {frequency}"
+        except (OSError, RuntimeError, ValueError):
+            self._standalone_finished.emit("", "", "", "")
+            return
+
+        connected_at = datetime.now().astimezone()
+        server = f"{endpoint.ip}:{endpoint.port}｜連線時間 {connected_at:%Y-%m-%d %H:%M:%S}"
+        if self._standalone_close_requested:
+            self._standalone_finished.emit(server, "", "", "")
+            return
+        device = self._roic_settings.get_daq_device() or ""
+        frequency = self._roic_settings.get_clock_frequency()
+        try:
             client.generate_roic_clock(frequency)
         except (OSError, RuntimeError, ValueError) as exc:
-            self._standalone_finished.emit(device, f"{step} failed: {exc or 'Timeout'}")
+            self._standalone_finished.emit(server, device, frequency, str(exc) or "Timeout")
         else:
-            self._standalone_finished.emit(device, "")
+            self._standalone_finished.emit(server, device, frequency, "")
 
-    @Slot(str, str)
-    def _apply_standalone_result(self, device: str, error: str) -> None:
+    @Slot(str, str, str, str)
+    def _apply_standalone_result(
+        self, server: str, device: str, frequency: str, error: str
+    ) -> None:
         self._standalone_starting = False
         if self._standalone_close_requested:
             self.close()
@@ -291,11 +302,16 @@ class FunctionTestWindow(InstrumentPanelBase):
         self._standalone_daq_device = device or None
         self.check_voltage_button.setEnabled(True)
         self._update_command_buttons()
-        if error:
-            self.statusBar().showMessage(error)
-        else:
-            frequency = self._tcp_client.roic_clock_frequency
-            self.statusBar().showMessage(f"EXT_CLK: {frequency} | DAQ: {device or 'Auto detect'}")
+        if not server:
+            self._standalone_status.setText("連線失敗")
+            return
+        result = "失敗" if error else "成功"
+        self._standalone_status.setText(
+            f"Server：{server}\n"
+            f"DAQ：{device or '未選擇（自動偵測）'}\n"
+            f"CLK_EXT：{frequency}（{result}）"
+        )
+        self._standalone_status.setToolTip(error)
 
     def _exit_tester(self) -> None:
         if not self._standalone and self._tcp_client is not None:
