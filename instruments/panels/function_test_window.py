@@ -216,8 +216,7 @@ class FunctionTestWindow(InstrumentPanelBase):
             self.check_voltage_button, 1, 0, 1, 6, Qt.AlignmentFlag.AlignLeft
         )
         self._voltage_displays: list[QLCDNumber] = []
-        dac_row = QHBoxLayout()
-        for name in ("BGR current", "DAC_V1", "DAC_V2", "DAC_V3"):
+        for row, name in enumerate(("BGR current", "DAC_V1", "DAC_V2", "DAC_V3"), 2):
             display = QLCDNumber(analog)
             display.setDigitCount(6)
             display.setFixedWidth(100 if name == "BGR current" else 90)
@@ -228,10 +227,10 @@ class FunctionTestWindow(InstrumentPanelBase):
             unit.setStyleSheet(_TRANSPARENT_LABEL)
             name_label = QLabel(f"{name}:")
             name_label.setStyleSheet(_TRANSPARENT_LABEL)
+            analog_layout.addWidget(name_label, row, 0)
+            analog_layout.addWidget(display, row, 1, Qt.AlignmentFlag.AlignLeft)
+            analog_layout.addWidget(unit, row, 2)
             if name == "BGR current":
-                analog_layout.addWidget(name_label, 2, 0)
-                analog_layout.addWidget(display, 2, 1)
-                analog_layout.addWidget(unit, 2, 2)
                 self.bgr_resistance = QSpinBox()
                 self.bgr_resistance.setRange(1, 1_000_000)
                 self.bgr_resistance.setAccessibleName("BGR resistance")
@@ -239,19 +238,13 @@ class FunctionTestWindow(InstrumentPanelBase):
                 ohm_unit = QLabel("Ω")
                 ohm_unit.setStyleSheet(_TRANSPARENT_LABEL)
                 analog_layout.addWidget(ohm_unit, 2, 4)
-            else:
-                if dac_row.count():
-                    dac_row.addSpacing(24)
-                dac_row.addWidget(name_label)
-                dac_row.addWidget(display)
-                dac_row.addWidget(unit)
-        dac_row.addStretch()
-        analog_layout.addLayout(dac_row, 3, 0, 1, 6)
         sections.addWidget(analog, alignment=Qt.AlignmentFlag.AlignLeft)
         sections.addStretch()
         self.setCentralWidget(root)
         self.ensurePolished()
-        self.setFixedSize(max(850, layout.sizeHint().width()), 590)
+        self.setFixedSize(
+            max(850, layout.sizeHint().width()), max(590, layout.minimumSize().height())
+        )
         self._update_command_buttons()
 
     def start_standalone(self) -> None:
@@ -265,10 +258,10 @@ class FunctionTestWindow(InstrumentPanelBase):
         self.check_voltage_button.setEnabled(False)
         self._standalone_status = QLabel("連線中…")
         self._standalone_status.setStyleSheet(_TRANSPARENT_LABEL)
-        self._standalone_status.setMinimumHeight(3 * self._standalone_status.fontMetrics().lineSpacing())
         self._standalone_status.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self.statusBar().addWidget(self._standalone_status, 1)
-        self.setFixedHeight(max(self.height(), self.minimumSizeHint().height()))
+        content_height = self.centralWidget().layout().minimumSize().height()
+        self.setFixedHeight(max(self.height(), content_height + self.statusBar().sizeHint().height()))
         Thread(target=self._configure_standalone, args=(client,), daemon=True).start()
 
     def _configure_standalone(self, client: BmtTcpClient) -> None:
@@ -309,10 +302,11 @@ class FunctionTestWindow(InstrumentPanelBase):
             return
         result = "失敗" if error else "成功"
         self._standalone_status.setText(
-            f"Server：{server}\n"
-            f"DAQ：{device or '未選擇（自動偵測）'}\n"
+            f"Server：{server}　｜　"
+            f"DAQ：{device or '未選擇（自動偵測）'}　｜　"
             f"CLK_EXT：{frequency}（{result}）"
         )
+        self.setFixedWidth(max(self.width(), self._standalone_status.sizeHint().width() + 20))
         self._standalone_status.setToolTip(error)
 
     def _exit_tester(self) -> None:
