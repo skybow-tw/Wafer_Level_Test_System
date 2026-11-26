@@ -95,6 +95,12 @@ class FunctionTestWindow(InstrumentPanelBase):
         self.start_button.setToolTip("Runs the clock checks, then reads both register maps.")
         self.start_button.clicked.connect(self._start_full_test)
         sidebar.addWidget(self.start_button)
+        sidebar.addSpacing(3 * self.start_button.height() - sidebar.spacing())
+        self.exit_button = QPushButton("Exit")
+        self.exit_button.setProperty("btnRole", "close")
+        self.exit_button.setFixedSize(130, 30)
+        self.exit_button.clicked.connect(self._exit_tester)
+        sidebar.addWidget(self.exit_button)
         sidebar.addStretch()
 
         clock = QGroupBox("Digital Output Clock Check")
@@ -291,6 +297,11 @@ class FunctionTestWindow(InstrumentPanelBase):
             frequency = self._tcp_client.roic_clock_frequency
             self.statusBar().showMessage(f"EXT_CLK: {frequency} | DAQ: {device or 'Auto detect'}")
 
+    def _exit_tester(self) -> None:
+        if not self._standalone and self._tcp_client is not None:
+            self._tcp_client.disconnect_roic()
+        self.close()
+
     def closeEvent(self, event) -> None:
         if self._standalone_starting:
             self._standalone_close_requested = True
@@ -340,6 +351,7 @@ class FunctionTestWindow(InstrumentPanelBase):
         connected = self._tcp_client is not None and self._tcp_client.is_connected
         clock_enabled = connected and bool(self._tcp_client.roic_clock_frequency)
         self.start_button.setEnabled(clock_enabled and not self._full_test_running)
+        self.exit_button.setEnabled(True)
         for button in self._command_buttons:
             if button in self._clock_check_buttons:
                 button.setEnabled(clock_enabled)
@@ -377,6 +389,7 @@ class FunctionTestWindow(InstrumentPanelBase):
             for button in self._command_buttons:
                 button.setEnabled(False)
             self.start_button.setEnabled(False)
+            self.exit_button.setEnabled(False)
             if check in _REGISTER_READS:
                 self.register_table.setRowCount(0)
                 self._register_has_failure = False
