@@ -67,8 +67,8 @@ class FunctionTestWindow(InstrumentPanelBase):
         self._standalone_finished.connect(self._apply_standalone_result)
         self._reply_buffer = b""
         self._clock_rows: dict[str, tuple[QLineEdit, QLabel, QLabel]] = {}
-        self._full_test_pending: deque[str] = deque()
-        self._full_test_running = False
+        self._pending_checks: deque[str] = deque()
+        self._active_sequence: QPushButton | None = None
         self._command_buttons: list[QPushButton] = []
         self._clock_check_buttons: list[QPushButton] = []
         self._read_finished.connect(self._apply_read_result)
@@ -81,6 +81,7 @@ class FunctionTestWindow(InstrumentPanelBase):
         layout.setSpacing(16)
 
         sidebar = QVBoxLayout()
+        sidebar.setSpacing(8)
         sections = QVBoxLayout()
         sections.setSpacing(10)
         layout.addLayout(sidebar)
@@ -96,7 +97,25 @@ class FunctionTestWindow(InstrumentPanelBase):
         self.start_button.setToolTip("Runs the clock checks, then reads both register maps.")
         self.start_button.clicked.connect(self._start_full_test)
         sidebar.addWidget(self.start_button)
-        sidebar.addSpacing(3 * self.start_button.height() - sidebar.spacing())
+        self.clock_sequence_button = QPushButton("Clock Check")
+        self.register_sequence_button = QPushButton("Read Reg. Map")
+        self.analog_sequence_button = QPushButton("Analog Test")
+        self._sequence_buttons = (
+            self.start_button, self.clock_sequence_button,
+            self.register_sequence_button, self.analog_sequence_button,
+        )
+        for button in self._sequence_buttons[1:]:
+            button.setFixedSize(130, 30)
+            sidebar.addWidget(button)
+        self.clock_sequence_button.clicked.connect(
+            lambda: self._start_sequence(self.clock_sequence_button, tuple(self._clock_rows))
+        )
+        self.register_sequence_button.clicked.connect(
+            lambda: self._start_sequence(self.register_sequence_button, tuple(_REGISTER_READS))
+        )
+        self.analog_sequence_button.clicked.connect(
+            lambda: self._start_sequence(self.analog_sequence_button, (_ENABLE_OUTPUT_CHECK,))
+        )
         self.exit_button = QPushButton("Exit")
         self.exit_button.setProperty("btnRole", "close")
         self.exit_button.setFixedSize(130, 30)
@@ -332,6 +351,7 @@ class FunctionTestWindow(InstrumentPanelBase):
 
     def _check_voltage(self) -> None:
         self.check_voltage_button.setEnabled(False)
+        self.analog_sequence_button.setEnabled(False)
         for display in self._voltage_displays:
             display.display("--")
         Thread(target=self._read_voltages, daemon=True).start()
@@ -353,6 +373,10 @@ class FunctionTestWindow(InstrumentPanelBase):
     @Slot(object, str)
     def _apply_voltages(self, values: list[float], error: str) -> None:
         self.check_voltage_button.setEnabled(True)
+        if self._active_sequence is self.analog_sequence_button:
+            self._finish_sequence("Check Voltage", error)
+        elif self.exit_button.isEnabled():
+            self._update_command_buttons()
         if error:
             QMessageBox.warning(self, "NI DAQ read failed", error)
             return
@@ -362,7 +386,10 @@ class FunctionTestWindow(InstrumentPanelBase):
     def _update_command_buttons(self) -> None:
         connected = self._tcp_client is not None and self._tcp_client.is_connected
         clock_enabled = connected and bool(self._tcp_client.roic_clock_frequency)
-        self.start_button.setEnabled(clock_enabled and not self._full_test_running)
+        self.start_button.setEnabled(clock_enabled)
+        self.clock_sequence_button.setEnabled(clock_enabled)
+        self.register_sequence_button.setEnabled(connected)
+        self.analog_sequence_button.setEnabled(connected and self.check_voltage_button.isEnabled())
         self.exit_button.setEnabled(True)
         for button in self._command_buttons:
             if button in self._clock_check_buttons:
@@ -371,18 +398,34 @@ class FunctionTestWindow(InstrumentPanelBase):
                 button.setEnabled(connected)
 
     def _start_full_test(self) -> None:
-        if not self.start_button.isEnabled():
-            return
-        self._full_test_running = True
-        for check in _REGISTER_READS:
-            self._set_indicator(self._register_indicators[check][0], None)
-        self._full_test_pending.extend((*self._clock_rows, *_REGISTER_READS))
-        self._run_next_full_test_step()
+        self._start_sequence(self.start_button, (*self._clock_rows, *_REGISTER_READS))
 
-    def _run_next_full_test_step(self) -> None:
-        check = self._full_test_pending.popleft()
-        self.start_button.setToolTip(f"Full Test in progress: {check}")
+    def _start_sequence(self, button: QPushButton, checks: tuple[str, ...]) -> None:
+        if not button.isEnabled() or self._active_sequence is not None:
+            return
+        self._active_sequence = button
+        if button is self.analog_sequence_button:
+            self.check_voltage_button.setEnabled(False)
+        for check in _REGISTER_READS:
+            if check in checks:
+                self._set_indicator(self._register_indicators[check][0], None)
+        self._pending_checks.extend(checks)
+        self._run_next_sequence_step()
+
+    def _run_next_sequence_step(self) -> None:
+        check = self._pending_checks.popleft()
+        self._active_sequence.setToolTip(f"In progress: {check}")
         self._send_command(f"PI5, {check}\n")
+
+    def _finish_sequence(self, check: str, error: str) -> None:
+        button = self._active_sequence
+        self._active_sequence = None
+        self._pending_checks.clear()
+        if button is self.analog_sequence_button:
+            self.check_voltage_button.setEnabled(True)
+        if button is not None:
+            button.setToolTip(f"Stopped at {check}: {error}" if error else "Sequence complete.")
+        self._update_command_buttons()
 
     def _make_command_button(self, label: str, command: str) -> QPushButton:
         button = QPushButton(label)
@@ -400,7 +443,8 @@ class FunctionTestWindow(InstrumentPanelBase):
         if check in self._clock_rows or check in _REGISTER_READS or check == _ENABLE_OUTPUT_CHECK:
             for button in self._command_buttons:
                 button.setEnabled(False)
-            self.start_button.setEnabled(False)
+            for button in self._sequence_buttons:
+                button.setEnabled(False)
             self.exit_button.setEnabled(False)
             if check in _REGISTER_READS:
                 self.register_table.setRowCount(0)
@@ -503,19 +547,17 @@ class FunctionTestWindow(InstrumentPanelBase):
         elif check == _ENABLE_OUTPUT_CHECK:
             self._set_indicator(self.output_lamp, not error)
             self.enable_output_button.setToolTip(error or "Server confirmed analog output is on")
-        if self._full_test_running:
+        if self._active_sequence is not None:
             connected = self._tcp_client is not None and self._tcp_client.is_connected
-            if not error and connected and self._full_test_pending:
-                self._run_next_full_test_step()
+            if not error and connected and self._pending_checks:
+                self._run_next_sequence_step()
                 return
-            self._full_test_running = False
-            self._full_test_pending.clear()
-            if error or not connected:
-                self.start_button.setToolTip(
-                    f"Full Test stopped at {check}: {error or 'Server disconnected'}"
-                )
-            else:
-                self.start_button.setToolTip("Full Test sequence complete.")
+            if not error and connected and self._active_sequence is self.analog_sequence_button:
+                self._active_sequence.setToolTip("In progress: Check Voltage")
+                self._check_voltage()
+                return
+            self._finish_sequence(check, error or ("" if connected else "Server disconnected"))
+            return
         self._update_command_buttons()
 
     def start_measurement(
