@@ -258,7 +258,7 @@ class FunctionTestWindow(InstrumentPanelBase):
         table.ensurePolished()
         header.ensurePolished()
         for column in range(table.columnCount()):
-            table.setColumnWidth(column, header.sectionSizeHint(column))
+            table.setColumnWidth(column, 90)
         frame = 2 * table.frameWidth()
         table.setFixedSize(
             header.length() + table.verticalScrollBar().sizeHint().width() + frame,
