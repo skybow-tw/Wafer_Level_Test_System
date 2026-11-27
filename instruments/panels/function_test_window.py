@@ -161,10 +161,15 @@ class FunctionTestWindow(InstrumentPanelBase):
         register_layout = QVBoxLayout(register_map)
         register_layout.setContentsMargins(10, 4, 10, 8)
         register_layout.setSpacing(4)
-        register_buttons = QHBoxLayout()
+        register_tables = QHBoxLayout()
         self._register_read_buttons = {}
         self._register_indicators: dict[str, tuple[QLabel, QLabel]] = {}
+        self._register_tables: dict[str, QTableWidget] = {}
         for label, check in (("Read Digital", "Read_Digital"), ("Read Analog", "Read_Analog")):
+            column_layout = QVBoxLayout()
+            column_layout.setSpacing(4)
+            register_buttons = QHBoxLayout()
+            register_buttons.setSpacing(4)
             button = self._make_command_button(label, f"PI5, {check}\n")
             self._register_read_buttons[check] = button
             register_buttons.addWidget(button)
@@ -178,14 +183,12 @@ class FunctionTestWindow(InstrumentPanelBase):
             register_buttons.addWidget(status)
             self._register_indicators[check] = (lamp, status)
             self._set_indicator(lamp, None)
-        register_buttons.addStretch()
-        register_layout.addLayout(register_buttons)
-        register_tables = QHBoxLayout()
-        self._register_tables: dict[str, QTableWidget] = {}
-        for check in _REGISTER_READS:
+            register_buttons.addStretch()
+            column_layout.addLayout(register_buttons)
             table = self._make_register_table(register_map)
             self._register_tables[check] = table
-            register_tables.addWidget(table)
+            column_layout.addWidget(table, alignment=Qt.AlignmentFlag.AlignLeft)
+            register_tables.addLayout(column_layout)
         register_tables.addStretch()
         register_layout.addLayout(register_tables)
         sections.addWidget(register_map, alignment=Qt.AlignmentFlag.AlignLeft)
@@ -248,7 +251,7 @@ class FunctionTestWindow(InstrumentPanelBase):
     @staticmethod
     def _make_register_table(parent: QWidget) -> QTableWidget:
         table = QTableWidget(0, 3, parent)
-        table.setHorizontalHeaderLabels(("Addr.", "Default", "Read"))
+        table.setHorizontalHeaderLabels(("Address", "Default", "Read"))
         header = table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
         table.verticalHeader().setVisible(False)
@@ -257,8 +260,10 @@ class FunctionTestWindow(InstrumentPanelBase):
         table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         table.ensurePolished()
         header.ensurePolished()
+        if any(header.sectionSizeHint(column) > 85 for column in range(table.columnCount())):
+            header.setStyleSheet("QHeaderView { font-size: 11px; }")
         for column in range(table.columnCount()):
-            table.setColumnWidth(column, 90)
+            table.setColumnWidth(column, 85)
         frame = 2 * table.frameWidth()
         table.setFixedSize(
             header.length() + table.verticalScrollBar().sizeHint().width() + frame,
