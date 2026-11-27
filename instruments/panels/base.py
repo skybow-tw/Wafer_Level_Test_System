@@ -62,10 +62,20 @@ class InstrumentPanelBase(QMainWindow):
         """Whether automated measurement writes one statistics row per die."""
         return False
 
+    @property
+    def uses_register_measurement(self) -> bool:
+        return False
+
     def get_statistics_report_headers(self) -> tuple[str, ...]:
         raise NotImplementedError
 
-    def get_statistics_report_values(self) -> tuple[float | int | None, ...]:
+    def get_statistics_report_values(self) -> tuple[float | int | str | None, ...]:
+        raise NotImplementedError
+
+    def save_register_measurement(self, session_dir: Path, die_x: int, die_y: int) -> Path:
+        raise NotImplementedError
+
+    def register_measurement_passed(self) -> bool:
         raise NotImplementedError
 
     def get_lcr_die_summary(self) -> LcrDieSummary:

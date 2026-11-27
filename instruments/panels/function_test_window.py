@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 from collections import deque
 from datetime import datetime
 from pathlib import Path
@@ -74,6 +75,10 @@ class FunctionTestWindow(InstrumentPanelBase):
         self._read_finished.connect(self._apply_read_result)
         self._register_received.connect(self._append_register)
         self._register_has_failure = False
+        self._register_passed: dict[str, bool | None] = {
+            check: None for check in _REGISTER_READS
+        }
+        self._automated_measurement = False
         self._voltages_finished.connect(self._apply_voltages)
         root = QWidget(self)
         layout = QHBoxLayout(root)
@@ -413,6 +418,7 @@ class FunctionTestWindow(InstrumentPanelBase):
             self.check_voltage_button.setEnabled(False)
         for check in _REGISTER_READS:
             if check in checks:
+                self._register_passed[check] = None
                 self._set_indicator(self._register_indicators[check][0], None)
         self._pending_checks.extend(checks)
         self._run_next_sequence_step()
@@ -431,6 +437,12 @@ class FunctionTestWindow(InstrumentPanelBase):
         if button is not None:
             button.setToolTip(f"Stopped at {check}: {error}" if error else "Sequence complete.")
         self._update_command_buttons()
+        if self._automated_measurement:
+            self._automated_measurement = False
+            if error:
+                self.measurement_failed.emit(f"ROIC register read stopped at {check}: {error}")
+            else:
+                self.measurement_finished.emit([], [])
 
     def _make_command_button(self, label: str, command: str) -> QPushButton:
         button = QPushButton(label)
@@ -454,6 +466,7 @@ class FunctionTestWindow(InstrumentPanelBase):
             if check in _REGISTER_READS:
                 self._register_tables[check].setRowCount(0)
                 self._register_has_failure = False
+                self._register_passed[check] = None
                 self._set_indicator(self._register_indicators[check][0], None)
                 self._register_read_buttons[check].setToolTip("Reading register map...")
             elif check == _ENABLE_OUTPUT_CHECK:
@@ -547,8 +560,10 @@ class FunctionTestWindow(InstrumentPanelBase):
             status_label.setToolTip(error or status)
             self._set_indicator(lamp, not error and status == "PASS")
         elif check in _REGISTER_READS:
+            passed = not error and not self._register_has_failure
+            self._register_passed[check] = passed
             self._set_indicator(
-                self._register_indicators[check][0], not error and not self._register_has_failure
+                self._register_indicators[check][0], passed
             )
             result = "Register check failed" if self._register_has_failure else "Register map complete"
             self._register_read_buttons[check].setToolTip(error or result)
@@ -575,4 +590,52 @@ class FunctionTestWindow(InstrumentPanelBase):
         *,
         automated: bool = False,
     ) -> bool:
-        return False
+        del die_x, die_y
+        if not automated or self._active_sequence is not None or self._automated_measurement:
+            return False
+        if not self.register_sequence_button.isEnabled():
+            return False
+        self._automated_measurement = True
+        self._start_sequence(self.register_sequence_button, tuple(_REGISTER_READS))
+        return True
+
+    @property
+    def is_measuring(self) -> bool:
+        return self._automated_measurement
+
+    @property
+    def uses_statistics_report(self) -> bool:
+        return True
+
+    @property
+    def uses_register_measurement(self) -> bool:
+        return True
+
+    def get_statistics_report_headers(self) -> tuple[str, ...]:
+        return ("X", "Y", "Digital Reg.", "Analog Re.")
+
+    def get_statistics_report_values(self) -> tuple[str, str]:
+        return (
+            "PASS" if self._register_passed["Read_Digital"] else "fail",
+            "PASS" if self._register_passed["Read_Analog"] else "fail",
+        )
+
+    def register_measurement_passed(self) -> bool:
+        return all(self._register_passed.values())
+
+    def save_register_measurement(self, session_dir: Path, die_x: int, die_y: int) -> Path:
+        """Save all three displayed columns of the digital register table."""
+        table = self._register_tables["Read_Digital"]
+        output_path = session_dir / f"X{die_x}_Y{die_y}_ROIC.csv"
+        with output_path.open("w", newline="", encoding="utf-8-sig") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(
+                table.horizontalHeaderItem(column).text()
+                for column in range(table.columnCount())
+            )
+            for row in range(table.rowCount()):
+                writer.writerow(
+                    table.item(row, column).text() if table.item(row, column) else ""
+                    for column in range(table.columnCount())
+                )
+        return output_path

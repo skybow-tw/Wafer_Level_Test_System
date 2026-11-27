@@ -76,7 +76,7 @@ def append_statistics_row(
     session_dir: Path,
     die_x: int,
     die_y: int,
-    values: tuple[float | int | None, ...],
+    values: tuple[float | int | str | None, ...],
 ) -> Path:
     """Append a coordinate-prefixed row to an already initialized report."""
     path = _report_path(session_dir)

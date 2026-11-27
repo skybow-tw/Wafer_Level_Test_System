@@ -15,7 +15,7 @@ from PySide6.QtWidgets import QMessageBox, QWidget
 
 from map_data_reader import InspectionTargetList
 from prober_motor.base import ChuckMotorBase
-from lcr_criterion import GOOD_DIE_BIN, judge_real_lcr_die, judge_virtual_lcr_die
+from lcr_criterion import BAD_DIE_BIN, GOOD_DIE_BIN, judge_real_lcr_die, judge_virtual_lcr_die
 from instruments.panels.registry import DSA_DISPLAY_NAME
 from save_params import get_save_params
 from statistics_report import append_statistics_row
@@ -231,7 +231,7 @@ class MeasurementSession(QObject):
             return
 
         if self._die_step == _DieStep.START_MEASURE:
-            logger.info("Die (%d, %d): starting LCR measurement", die_x, die_y)
+            logger.info("Die (%d, %d): starting instrument measurement", die_x, die_y)
             self._start_instrument_measurement()
             return
 
@@ -341,7 +341,10 @@ class MeasurementSession(QObject):
                 output_path = self._session_dir / self._die_measurement_filename(
                     die_x, die_y
                 )
-                if not output_path.exists():
+                instrument = self._instrument_window
+                if instrument is not None and instrument.uses_register_measurement:
+                    instrument.save_register_measurement(self._session_dir, die_x, die_y)
+                elif not output_path.exists():
                     write_die_measurement_csv(
                         self._session_dir,
                         die_x,
@@ -350,7 +353,6 @@ class MeasurementSession(QObject):
                         y_values,
                         tag=self._save_filename_tag(),
                     )
-                instrument = self._instrument_window
                 if instrument is not None and instrument.uses_statistics_report:
                     append_statistics_row(
                         self._session_dir,
@@ -455,6 +457,8 @@ class MeasurementSession(QObject):
         instrument = self._instrument_window
         if instrument is None:
             return GOOD_DIE_BIN
+        if instrument.uses_register_measurement:
+            return GOOD_DIE_BIN if instrument.register_measurement_passed() else BAD_DIE_BIN
         if instrument.is_virtual_lcr:
             return judge_virtual_lcr_die(x_values, y_values)
         return judge_real_lcr_die(x_values, y_values)
@@ -469,6 +473,11 @@ class MeasurementSession(QObject):
         return ""
 
     def _die_measurement_filename(self, die_x: int, die_y: int) -> str:
+        if (
+            self._instrument_window is not None
+            and self._instrument_window.uses_register_measurement
+        ):
+            return f"X{die_x}_Y{die_y}_ROIC.csv"
         return die_measurement_filename(
             die_x, die_y, tag=self._save_filename_tag()
         )
@@ -547,9 +556,13 @@ def measure_Start(
     )
 
     def _handle_finished(results: list[DieMeasurementResult]) -> None:
-        if session_dir is not None and results:
+        if (
+            session_dir is not None
+            and results
+            and (instrument_window is None or not instrument_window.uses_register_measurement)
+        ):
             write_measurement_csv(
-                session_dir, results, tag=session._save_filename_tag()
+                session_dir, results, tag=session._save_filename_tag(),
             )
         if on_complete is not None:
             on_complete(results)
