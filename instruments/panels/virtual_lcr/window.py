@@ -33,6 +33,7 @@ class VirtualLcrWindow(InstrumentPanelBase):
         ui.btn_simulation.clicked.connect(self._on_simulation)
         ui.btn_exit.clicked.connect(self.close)
         self._btn_simulation = ui.btn_simulation
+        self._spin_point_count = ui.spin_point_count
         self._logic.measurement_finished.connect(self.measurement_finished)
         self._logic.measurement_failed.connect(self._on_measurement_failed)
         self._logic.measuring_changed.connect(self._on_measuring_changed)
@@ -77,13 +78,18 @@ class VirtualLcrWindow(InstrumentPanelBase):
             die_x = params.x
         if die_y is None:
             die_y = params.y
-        return self._logic.start_measurement(die_x=die_x, die_y=die_y)
+        return self._logic.start_measurement(
+            die_x=die_x,
+            die_y=die_y,
+            point_count=self._spin_point_count.value(),
+        )
 
     def _on_simulation(self) -> None:
         self.start_measurement()
 
     def _on_measuring_changed(self, measuring: bool) -> None:
         self._btn_simulation.setEnabled(not measuring)
+        self._spin_point_count.setEnabled(not measuring)
 
     def _on_measurement_failed(self, message: str) -> None:
         QMessageBox.warning(self, "LCR 存檔失敗", message)

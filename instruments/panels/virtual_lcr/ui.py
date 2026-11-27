@@ -6,18 +6,26 @@ from dataclasses import dataclass
 
 from PySide6.QtWidgets import (
     QHBoxLayout,
+    QLabel,
     QPushButton,
     QSizePolicy,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
 
 from instruments.panels.common import mark_close_button
+from instruments.panels.virtual_lcr.logic import (
+    DEFAULT_MEASUREMENT_POINT_COUNT,
+    MAX_MEASUREMENT_POINT_COUNT,
+    MIN_MEASUREMENT_POINT_COUNT,
+)
 
 
 @dataclass
 class VirtualLcrUi:
     root: QWidget
+    spin_point_count: QSpinBox
     btn_simulation: QPushButton
     btn_exit: QPushButton
     chart_host: QWidget
@@ -36,6 +44,16 @@ def build_virtual_lcr_ui(chart_view: QWidget) -> VirtualLcrUi:
     button_col = QVBoxLayout()
     button_col.setContentsMargins(0, 0, 0, 0)
     button_col.setSpacing(8)
+
+    point_count_label = QLabel("Points")
+    button_col.addWidget(point_count_label)
+    spin_point_count = QSpinBox()
+    spin_point_count.setRange(
+        MIN_MEASUREMENT_POINT_COUNT, MAX_MEASUREMENT_POINT_COUNT
+    )
+    spin_point_count.setValue(DEFAULT_MEASUREMENT_POINT_COUNT)
+    spin_point_count.setFixedWidth(120)
+    button_col.addWidget(spin_point_count)
 
     sim_button = QPushButton("Simulation")
     sim_button.setMinimumSize(120, 44)
@@ -69,6 +87,7 @@ def build_virtual_lcr_ui(chart_view: QWidget) -> VirtualLcrUi:
 
     return VirtualLcrUi(
         root=central,
+        spin_point_count=spin_point_count,
         btn_simulation=sim_button,
         btn_exit=exit_button,
         chart_host=chart_view,

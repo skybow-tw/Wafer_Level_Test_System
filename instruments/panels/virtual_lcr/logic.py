@@ -8,24 +8,34 @@ from PySide6.QtCore import QObject, QTimer, Signal
 
 from instruments.panels.lcr.chart import LcrChartController
 from instruments.panels.lcr.measurement import (
-    build_dc_offset_sweep_points,
     generate_lcr_simulation_values,
     save_lcr_measurement_csv,
 )
 
-_MEASUREMENT_POINT_COUNT = 20
+MIN_MEASUREMENT_POINT_COUNT = 3
+MAX_MEASUREMENT_POINT_COUNT = 21
+DEFAULT_MEASUREMENT_POINT_COUNT = 7
 _MEASUREMENT_POINT_DELAY_MS = 100
 _DEFAULT_VIRTUAL_DC_OFFSET_START_V = 0.0
 _DEFAULT_VIRTUAL_DC_OFFSET_STOP_V = 20.0
-_DEFAULT_VIRTUAL_DC_OFFSET_STEP_V = 1.0
 
 
-def default_virtual_dc_offset_points() -> list[float]:
-    return build_dc_offset_sweep_points(
-        _DEFAULT_VIRTUAL_DC_OFFSET_START_V,
-        _DEFAULT_VIRTUAL_DC_OFFSET_STOP_V,
-        _DEFAULT_VIRTUAL_DC_OFFSET_STEP_V,
+def default_virtual_dc_offset_points(
+    point_count: int = DEFAULT_MEASUREMENT_POINT_COUNT,
+) -> list[float]:
+    if not MIN_MEASUREMENT_POINT_COUNT <= point_count <= MAX_MEASUREMENT_POINT_COUNT:
+        raise ValueError("Virtual LCR point count must be between 3 and 21")
+    voltage_range = (
+        _DEFAULT_VIRTUAL_DC_OFFSET_STOP_V - _DEFAULT_VIRTUAL_DC_OFFSET_START_V
     )
+    return [
+        round(
+            _DEFAULT_VIRTUAL_DC_OFFSET_START_V
+            + voltage_range * index / (point_count - 1),
+            6,
+        )
+        for index in range(point_count)
+    ]
 
 
 class VirtualLcrMeasurementLogic(QObject):
@@ -69,9 +79,12 @@ class VirtualLcrMeasurementLogic(QObject):
         self,
         die_x: int | None = None,
         die_y: int | None = None,
+        *,
+        point_count: int = DEFAULT_MEASUREMENT_POINT_COUNT,
     ) -> bool:
         if self._measuring:
             return False
+        dc_offset_points = default_virtual_dc_offset_points(point_count)
         self._measurement_die_x = die_x
         self._measurement_die_y = die_y
         self._measuring = True
@@ -84,9 +97,8 @@ class VirtualLcrMeasurementLogic(QObject):
         self._lcr_c0_value = None
         self._lcr_vp_offset_v = None
         self._lcr_delta_c = None
-        self._dc_offset_points = default_virtual_dc_offset_points()
+        self._dc_offset_points = dc_offset_points
         self._chart.function_label = "Cp-D"
-        point_count = len(self._dc_offset_points) or _MEASUREMENT_POINT_COUNT
         self._pending_y_values, self._pending_secondary_values = (
             generate_lcr_simulation_values(point_count)
         )
@@ -97,15 +109,12 @@ class VirtualLcrMeasurementLogic(QObject):
         self._measure_timer.start(_MEASUREMENT_POINT_DELAY_MS)
 
     def _append_next_point(self) -> None:
-        total_points = len(self._pending_y_values) or _MEASUREMENT_POINT_COUNT
+        total_points = len(self._pending_y_values)
         if self._measure_point_index >= total_points:
             self._finish_measurement()
             return
 
-        if self._dc_offset_points:
-            x_value = self._dc_offset_points[self._measure_point_index]
-        else:
-            x_value = float(self._measure_point_index + 1)
+        x_value = self._dc_offset_points[self._measure_point_index]
         y_value = self._pending_y_values[self._measure_point_index]
         secondary_value = self._pending_secondary_values[self._measure_point_index]
         self._measure_x_values.append(x_value)
