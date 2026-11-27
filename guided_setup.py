@@ -125,7 +125,7 @@ _TRADITIONAL_INSTRUMENT_BUTTONS: tuple[tuple[str, InstrumentType], ...] = (
 _OTHERS_INSTRUMENT_BUTTONS: tuple[tuple[str, InstrumentType], ...] = (
     ("LCR Meter", InstrumentType.LCR_METER),
     ("DSA", InstrumentType.DSA),
-    ("VirtualLCR", InstrumentType.VIRTUAL_LCR),
+    ("LCR Simulator", InstrumentType.VIRTUAL_LCR),
 )
 
 _BOLOMETER_INSTRUMENT_BUTTONS: tuple[tuple[str, InstrumentType], ...] = (
@@ -1006,6 +1006,15 @@ class GuidedSetupWindow(QMainWindow):
                 button.toggled.connect(
                     lambda checked, btn=button, kind=instrument_type: btn.setIcon(
                         _meter_icon(kind, checked)
+                    )
+                )
+            elif instrument_type == InstrumentType.VIRTUAL_LCR:
+                button.setProperty("illustratedChoice", "true")
+                button.setIconSize(QSize(64, 64))
+                button.setIcon(_simulation_icon())
+                button.toggled.connect(
+                    lambda checked, btn=button: btn.setIcon(
+                        _simulation_icon(checked)
                     )
                 )
             button.setMinimumHeight(56)
