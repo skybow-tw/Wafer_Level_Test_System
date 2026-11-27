@@ -47,7 +47,7 @@ _REGISTER_READS = {
 
 class FunctionTestWindow(InstrumentPanelBase):
     _read_finished = Signal(str, str, str, str)
-    _register_received = Signal(str, str, str, bool)
+    _register_received = Signal(str, str, str, str, bool)
     _voltages_finished = Signal(object, str)
     _standalone_finished = Signal(str, str, str, str)
 
@@ -180,35 +180,14 @@ class FunctionTestWindow(InstrumentPanelBase):
             self._set_indicator(lamp, None)
         register_buttons.addStretch()
         register_layout.addLayout(register_buttons)
-        self.register_table = QTableWidget(0, 3, register_map)
-        self.register_table.setHorizontalHeaderLabels(("Address", "Default Value", "Read Value"))
-        self.register_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.Fixed
-        )
-        for column in range(3):
-            self.register_table.setColumnWidth(column, 150)
-        self.register_table.verticalHeader().setVisible(False)
-        self.register_table.setVerticalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAlwaysOn
-        )
-        self.register_table.setHorizontalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-        )
-        self.register_table.ensurePolished()
-        self.register_table.setFixedWidth(
-            self.register_table.horizontalHeader().length()
-            + self.register_table.verticalScrollBar().sizeHint().width()
-            + 2 * self.register_table.frameWidth()
-        )
-        self.register_table.setSelectionBehavior(
-            QAbstractItemView.SelectionBehavior.SelectRows
-        )
-        self.register_table.setFixedHeight(
-            self.register_table.horizontalHeader().sizeHint().height()
-            + 3 * self.register_table.verticalHeader().defaultSectionSize()
-            + 2 * self.register_table.frameWidth()
-        )
-        register_layout.addWidget(self.register_table)
+        register_tables = QHBoxLayout()
+        self._register_tables: dict[str, QTableWidget] = {}
+        for check in _REGISTER_READS:
+            table = self._make_register_table(register_map)
+            self._register_tables[check] = table
+            register_tables.addWidget(table)
+        register_tables.addStretch()
+        register_layout.addLayout(register_tables)
         sections.addWidget(register_map, alignment=Qt.AlignmentFlag.AlignLeft)
 
         analog = QGroupBox("Analog_Output Test")
@@ -265,6 +244,27 @@ class FunctionTestWindow(InstrumentPanelBase):
             max(850, layout.sizeHint().width()), max(590, layout.minimumSize().height())
         )
         self._update_command_buttons()
+
+    @staticmethod
+    def _make_register_table(parent: QWidget) -> QTableWidget:
+        table = QTableWidget(0, 3, parent)
+        table.setHorizontalHeaderLabels(("Addr.", "Default", "Read"))
+        header = table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
+        table.verticalHeader().setVisible(False)
+        table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+        table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        table.ensurePolished()
+        header.ensurePolished()
+        for column in range(table.columnCount()):
+            table.setColumnWidth(column, header.sectionSizeHint(column))
+        frame = 2 * table.frameWidth()
+        table.setFixedSize(
+            header.length() + table.verticalScrollBar().sizeHint().width() + frame,
+            header.sizeHint().height() + 3 * table.verticalHeader().defaultSectionSize() + frame,
+        )
+        return table
 
     def start_standalone(self) -> None:
         """Connect and configure the tester using the last local settings."""
@@ -447,7 +447,7 @@ class FunctionTestWindow(InstrumentPanelBase):
                 button.setEnabled(False)
             self.exit_button.setEnabled(False)
             if check in _REGISTER_READS:
-                self.register_table.setRowCount(0)
+                self._register_tables[check].setRowCount(0)
                 self._register_has_failure = False
                 self._set_indicator(self._register_indicators[check][0], None)
                 self._register_read_buttons[check].setToolTip("Reading register map...")
@@ -488,7 +488,7 @@ class FunctionTestWindow(InstrumentPanelBase):
                         if len(fields) == 5 and fields[0] in register_prefixes:
                             _, address, default, actual, status = fields
                             if status.casefold() in ("ok", "fail"):
-                                self._register_received.emit(address, default, actual, status.casefold() == "fail")
+                                self._register_received.emit(check, address, default, actual, status.casefold() == "fail")
                                 deadline = monotonic() + 5
                         continue
                     reply = _CLOCK_REPLY.fullmatch(line.strip())
@@ -512,17 +512,20 @@ class FunctionTestWindow(InstrumentPanelBase):
             self._reply_buffer = b""
             self._read_finished.emit(check, "", "", "Error")
 
-    @Slot(str, str, str, bool)
-    def _append_register(self, address: str, default: str, actual: str, failed: bool) -> None:
+    @Slot(str, str, str, str, bool)
+    def _append_register(
+        self, check: str, address: str, default: str, actual: str, failed: bool
+    ) -> None:
         self._register_has_failure |= failed
-        row = self.register_table.rowCount()
-        self.register_table.insertRow(row)
+        table = self._register_tables[check]
+        row = table.rowCount()
+        table.insertRow(row)
         for column, value in enumerate((address, default, actual)):
             item = QTableWidgetItem(value)
             item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             if failed and column == 2:
                 item.setBackground(QColor("#F44336"))
-            self.register_table.setItem(row, column, item)
+            table.setItem(row, column, item)
 
     @Slot(str, str, str, str)
     def _apply_read_result(self, check: str, status: str, frequency: str, error: str) -> None:
